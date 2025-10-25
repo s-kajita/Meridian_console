@@ -1360,6 +1360,8 @@ def meridian_loop():
     _checksum = np.array([0], dtype=np.int16)
     atexit.register(cleanup)  # この行は機能しているかどうかわからない
 
+    reset_counter()      # 各種カウンターの初期化処理   (reset counterボタンを押すのと同じ)
+
     while (True):
         print("Start.")
         # 180個の要素を持つint8型のNumPy配列を作成
@@ -1801,10 +1803,11 @@ def meridian_loop():
 
                         mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(mrd.error_count_esp_to_pc/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
                             mrd.error_count_esp_to_tsy/mrd.loop_count)) + " TsySKIP:"+str("{:.2%}".format(mrd.error_count_tsy_skip/mrd.loop_count)) + " ESPSKIP:" + str("{:.2%}".format(mrd.error_count_esp_skip/mrd.loop_count))
-
                         mrd.message4 = "SKIP COUNT Tsy:" + str("{:}".format(mrd.error_count_tsy_skip))+" ESP:"+str("{:}".format(mrd.error_count_esp_skip))+" PC:"+str("{:}".format(mrd.error_count_pc_skip)) + " Servo:"+str(
                             "{:}".format(mrd.error_count_servo_skip))+" PCframe:"+str(mrd.loop_count)+" BOARDframe:"+str(mrd.frame_sync_r_recv)+" "+str(int(mrd.loop_count/now))+"Hz"
-
+                        '''
+                        mrd.message4 = "time="+str(time.time())+"  mrd.start="+str(mrd.start)+" now "+str(now)
+                        '''
                         # 今回受信のシーケンス番号を次回比較用にキープ
                         mrd.frame_sync_r_last = mrd.frame_sync_r_recv
 
