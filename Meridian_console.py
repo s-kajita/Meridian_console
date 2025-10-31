@@ -1524,6 +1524,7 @@ def meridian_loop():
                         if mrd.flag_servo_power == 2:  # サーボオンボタン押下初回のみ最終受け取りサーボ情報をキープ
                             for i in range(21, 81, 2):
                                 mrd.s_meridim_motion_keep_f[i] = mrd.r_meridim[i]*0.01
+                                mrd.s_meridim_motion_f[i] = mrd.s_meridim_motion_keep_f[i]  # Target初期値とする
                             mrd.flag_servo_power = 1
 
                         if mrd.flag_servo_power == -1:  # サーボオフボタン押下初回のみ最終送信サーボ情報をキープ
@@ -1638,7 +1639,7 @@ def meridian_loop():
     # [ 5-3 ] : PC側発行のサーボ位置をs_meridimに書き込む
                         if mrd.flag_enable_send_made_data:  # PC側発行データの送信Enable判定
                             for i in range(21, 81, 2):
-                                if mrd.flag_demo_action | mrd.flag_python_action | mrd.flag_enable_send_made_data | mrd.flag_ros1_sub:
+                                if mrd.flag_demo_action | mrd.flag_python_action | mrd.flag_ros1_sub:
                                     mrd.s_meridim[i] = int(mrd.s_meridim_motion_f[i]*100)
                                 else:  # Consoleでモーションを指定しない場合はハンチング防止としてサーボオフ時のデータを送信
                                     mrd.s_meridim[i] = int(mrd.s_meridim_motion_keep_f[i]*100)
@@ -2346,7 +2347,8 @@ def main():
             for i in range(0, 15, 1):
                 _idld = mrd.d_meridim[MRD_L_ORIG_IDX + 1 + i * 2]
                 _idrd = mrd.d_meridim[MRD_R_ORIG_IDX + 1 + i * 2]
-                _idsensor = mrd.r_meridim[i+2]/10000
+                _idsensor = mrd.r_meridim[i+2]/100
+                #_idsensor = mrd.r_meridim[i+2]/10000
                 dpg.set_value("ID L"+str(i), _idld/100)  # サーボIDと数値の表示
                 dpg.set_value("ID R"+str(i), _idrd/100)
 
