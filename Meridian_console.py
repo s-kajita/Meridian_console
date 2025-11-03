@@ -190,6 +190,8 @@ class MeridianConsole:
             # 該当しないデータにはインデックスに-1を指定して送信データに反映されないようにしておく
             self.s_minitermnal_keep[i][0] = -1
 
+        self.running = True
+
         # エラー集計表示用変数
         self.loop_count = 1              # フレーム数のカウンタ
         self.frame_sync_s = 0            # 送信するframe_sync_r(0-59999)
@@ -433,15 +435,16 @@ def select_network_mode_and_ip(filename="board_ip.txt"):
 # Trim Setting ウィンドウを開く
 def open_trim_window():
     if not mrd.flag_trim_window_open:
-        mrd.flag_trim_window_open = True
         print("Open Trim Setting window.")
-        create_trim_window()
+        #create_trim_window()
+        dpg.configure_item("Trim Setting",collapsed=False)
+        dpg.configure_item("Trim Setting",show=True)    #最前面に表示させたいのだが・・・
+
+        mrd.flag_trim_window_open = True
     else:
         print("Trim Setting window is already open.")
 
 # Trim Setting ウィンドウを閉じる
-
-
 def close_trim_window():
     mrd.flag_trim_window_open = False
     dpg.delete_item("Trim Setting")
@@ -543,6 +546,7 @@ def apply_trim_input_value(sender, app_data, user_data):
 def save_trimdata_to_eeprom():
     # Board側にサーボのトリム値と設定(ID, マウント, 回転方向)をEEPROMに保存させる
 
+    print("Set current pose as trim pose.")
     trim_msg = "Send Trim data:\n"
 
     # L系統サーボの処理
@@ -573,9 +577,12 @@ def save_trimdata_to_eeprom():
         # トリム値の設定
         if mrd.flag_trim_window_open and dpg.does_item_exist(f"Trim_{l_servo_ix}"):
             trim_val = dpg.get_value(f"Trim_{l_servo_ix}")
+            print(f"trim_val={trim_val}")
             # xxxx  + mrd.servo_l_trim_values_loaded[i]
             mrd.s_meridim_special[MRD_L_ORIG_IDX +
                                   1 + i * 2] = int(trim_val * 100)
+        else:
+            trim_val=0.0
 
         trim_msg += l_servo_ix + " " + f"{trim_val:.2f}"
 
@@ -743,16 +750,15 @@ def process_eeprom_data():
 
         print(f"{l_servo_key} - ID: {l_servo_ix}, Mt: {'1' if l_mount else '0'}, Dir: {'Rev ' if l_is_reverse else 'Norm'}, Trim: {l_trim_val}")
 
-        # Trim Settingウィンドウが開いている場合, UI要素を更新
-        if mrd.flag_trim_window_open:
-            if dpg.does_item_exist(f"Direction_{l_servo_key}"):
-                dpg.set_value(f"Direction_{l_servo_key}", l_is_reverse)
-            if dpg.does_item_exist(f"Mount_{l_servo_key}"):
-                dpg.set_value(f"Mount_{l_servo_key}", l_mount)
-            if dpg.does_item_exist(f"ID_{l_servo_key}"):
-                dpg.set_value(f"ID_{l_servo_key}", str(l_servo_ix))
-            if dpg.does_item_exist(f"Trim_{l_servo_key}"):
-                dpg.set_value(f"Trim_{l_servo_key}", l_trim_val)
+        # Trim SettingウィンドウのUI要素を更新
+        if dpg.does_item_exist(f"Direction_{l_servo_key}"):
+            dpg.set_value(f"Direction_{l_servo_key}", l_is_reverse)
+        if dpg.does_item_exist(f"Mount_{l_servo_key}"):
+            dpg.set_value(f"Mount_{l_servo_key}", l_mount)
+        if dpg.does_item_exist(f"ID_{l_servo_key}"):
+            dpg.set_value(f"ID_{l_servo_key}", str(l_servo_ix))
+        if dpg.does_item_exist(f"Trim_{l_servo_key}"):
+            dpg.set_value(f"Trim_{l_servo_key}", l_trim_val)
 
         # R系統サーボの処理
         r_settings = mrd.r_meridim[MRD_R_ORIG_IDX + i * 2]
@@ -781,17 +787,18 @@ def process_eeprom_data():
 
         print(f"{r_servo_key} - ID: {r_servo_ix}, Mt: {'1' if r_mount else '0'}, Dir: {'Rev ' if r_is_reverse else 'Norm'}, Trim: {r_trim_val}")
 
-        # Trim Settingウィンドウが開いている場合, UI要素を更新
-        if mrd.flag_trim_window_open:
-            if dpg.does_item_exist(f"Direction_{r_servo_key}"):
-                dpg.set_value(f"Direction_{r_servo_key}", r_is_reverse)
-            if dpg.does_item_exist(f"Mount_{r_servo_key}"):
-                dpg.set_value(f"Mount_{r_servo_key}", r_mount)
-            if dpg.does_item_exist(f"ID_{r_servo_key}"):
-                dpg.set_value(f"ID_{r_servo_key}", str(r_servo_ix))
-            if dpg.does_item_exist(f"Trim_{r_servo_key}"):
-                dpg.set_value(f"Trim_{r_servo_key}", r_trim_val)
+        # Trim SettingウィンドウのUI要素を更新
+        #if mrd.flag_trim_window_open:
+        if dpg.does_item_exist(f"Direction_{r_servo_key}"):
+            dpg.set_value(f"Direction_{r_servo_key}", r_is_reverse)
+        if dpg.does_item_exist(f"Mount_{r_servo_key}"):
+            dpg.set_value(f"Mount_{r_servo_key}", r_mount)
+        if dpg.does_item_exist(f"ID_{r_servo_key}"):
+            dpg.set_value(f"ID_{r_servo_key}", str(r_servo_ix))
+        if dpg.does_item_exist(f"Trim_{r_servo_key}"):
+            dpg.set_value(f"Trim_{r_servo_key}", r_trim_val)
 
+    '''
     # 読み込んだトリム値をサーボ位置にも反映する  ★試すのみ
     if mrd.flag_servo_power:  # サーボパワーがオンの場合のみ適用
         for i in range(MRD_SERVO_SLOTS):
@@ -810,7 +817,7 @@ def process_eeprom_data():
             mrd.s_meridim_motion_f[MRD_R_ORIG_IDX + 1 + i * 2] = r_trim_val
             # Axis Monitorのスライダーも更新
             dpg.set_value(f"ID R{i}", r_trim_val)
-
+    '''
     mrd.k_meridim_eeprom_last = mrd.r_meridim  # 受信したEEPROMの値を出力用にキープ
 
     print("EEPROM data loaded to Trim Settings window and applied to servos.")
@@ -865,11 +872,15 @@ def start_trim_setting():
     # 特殊コマンド送信のフラグを立てる
     mrd.flag_special_command_send = 1
 
+    # 現在角度がTrim poseになったので角度指令値は0
+    for i in range(21, 81, 2):
+        mrd.s_meridim_motion_f[i] = 0.0  
+        mrd.s_meridim_motion_keep_f[i] = 0.0  
+
     print("Command sent: Start Trim Setting Mode (10100)")
 
+
 # 整数値から特定の位置と長さでビットを抽出する関数
-
-
 def mrd_slice_bits(value, pos, length):
     # value: int, np.int32, np.int64など - 元の値
     # pos: int - 抽出を開始するビット位置(0から数える)
@@ -1168,19 +1179,20 @@ def step_trim(sender, app_data, user_data):
 
 # Trim Setting ウィンドウを作成する関数(最新版)
 def create_trim_window():
-
     # ビューポートサイズ取得
     viewport_width = dpg.get_viewport_width()
     viewport_height = dpg.get_viewport_height()
 
     # ブロック基準位置(画面幅に対する 7/25, 18/25 の比率を採用)
-    trim_window_left_block = viewport_width * 7 // 30   # 右サーボ列(R)
-    trim_window_right_block = viewport_width * 21 // 30  # 左サーボ列(L)
-
+    trim_window_left_block = viewport_width * 6 // 30   # 右サーボ列(R)
+    trim_window_right_block = viewport_width * 16 // 30  # 左サーボ列(L)
+    '''
     with dpg.window(label="Trim Setting", tag="Trim Setting",
                     width=viewport_width-20, height=viewport_height-20,
                     pos=[10, 10], on_close=close_trim_window):
-
+    '''
+    mrd.trim_setting_window = dpg.window(label="Trim Setting", tag="Trim Setting", width=587, height=560, pos=[260, 5], collapsed=True)
+    with mrd.trim_setting_window:
         # --- 上部コントロールエリア -------------------------------------------------
         power_state = dpg.get_value("Power")
         python_state = dpg.get_value("python")
@@ -1188,36 +1200,22 @@ def create_trim_window():
 
         dpg.add_button(label="Start Trim Setting",
                        callback=start_trim_setting, pos=[15, 35], width=140)
-
-        dpg.add_checkbox(label="Power",  tag="Power_Trim", default_value=power_state,
-                         pos=[viewport_width//2-250, 35], callback=sync_power_from_trim)
-        dpg.add_checkbox(label="Python", tag="Python_Trim", default_value=python_state,
-                         pos=[viewport_width//2-185, 35], callback=sync_python_from_trim)
-        dpg.add_checkbox(label="Enable", tag="Enable_Trim", default_value=enable_state,
-                         pos=[viewport_width//2-110, 35], callback=sync_enable_from_trim)
-
-        dpg.add_button(label="Save to EEPROM", callback=save_trimdata_to_eeprom, pos=[
-                       viewport_width//2-10, 35], width=125)
-        dpg.add_button(label="Load EEPROM to Board RAM", callback=load_trimdata_from_eeprom_to_board,
-                       pos=[viewport_width//2+125, 35], width=180)
-
-        dpg.add_button(label="Home", callback=set_trim_home,
-                       pos=[viewport_width//2+315, 35], width=60)
-
-        dpg.add_button(label="Export Settings", callback=export_settings_to_file,
-                       pos=[viewport_width//2+250, 62], width=125)
+        dpg.add_button(label="Save to EEPROM", callback=save_trimdata_to_eeprom, pos=[165, 35], width=125)
+        dpg.add_button(label="Load EEPROM to Board RAM", callback=load_trimdata_from_eeprom_to_board, pos=[300, 35], width=180)
+        dpg.add_button(label="Home", callback=set_trim_home,pos=[500, 35], width=60)
+        dpg.add_button(label="Export Settings", callback=export_settings_to_file,pos=[600, 62], width=125)
 
         # --- ステップ値入力フィールド(左下) ---------------------------------------
         dpg.add_input_float(label="delta", tag=STEP_TAG, default_value=1.0, width=90,
-                            pos=[viewport_height-20, viewport_height-80], min_value=0.0, min_clamped=True, format="%.2f")
+                            pos=[viewport_width // 2, viewport_height-80], min_value=0.0, min_clamped=True, format="%.2f")
 
         # --- ヘッダー(右サーボ列) -------------------------------------------------
         dpg.add_text("Idx", pos=[trim_window_left_block-165, 95])
         dpg.add_text("Mt",  pos=[trim_window_left_block-132, 95])
         dpg.add_text("ID",  pos=[trim_window_left_block-104, 95])
         dpg.add_text("Rev", pos=[trim_window_left_block-77,  95])
-        dpg.add_text("Right Side Servo Values", pos=[
-                     trim_window_left_block-30, 90])
+        dpg.add_text("Right Side Servo", pos=[
+                     trim_window_left_block-30, 95])
 
         # --- 右サーボ列 (R0-R14) ----------------------------------------------------
         for i in range(MRD_SERVO_SLOTS):
@@ -1231,7 +1229,6 @@ def create_trim_window():
                                width=25, callback=set_servo_id, user_data=f"R{i}", pos=[trim_window_left_block-107, base_y])
             dpg.add_checkbox(tag=f"Direction_R{i}", default_value=mrd.servo_direction[f"R{i}"],
                              callback=toggle_servo_direction, user_data=f"R{i}", pos=[trim_window_left_block-75, base_y])
-
             # スライダー
             dpg.add_slider_float(default_value=0.0, tag=slider_tag, max_value=180, min_value=-180, width=100,  # label=f"R{i}",
                                  callback=set_servo_angle_from_trim, pos=[trim_window_left_block-50, base_y])
@@ -1242,6 +1239,7 @@ def create_trim_window():
             dpg.add_button(label="+", width=18, pos=[
                            trim_window_left_block+77, base_y], callback=step_trim, user_data=(slider_tag, +1))
 
+            '''
             # インプットフィールド
             dpg.add_input_text(tag=f"Input_Trim_R{i}", decimal=True, width=50, pos=[
                                trim_window_left_block+100, base_y])
@@ -1249,13 +1247,13 @@ def create_trim_window():
             # エンターボタン
             dpg.add_button(label="Enter", tag=f"Enter_Trim_R{i}", callback=apply_trim_input_value, user_data=f"R{i}",
                            width=42, pos=[trim_window_left_block+155, base_y])
-
+            '''
         # --- ヘッダー(左サーボ列) -------------------------------------------------
         dpg.add_text("Idx", pos=[trim_window_right_block-165, 95])
         dpg.add_text("Mt",  pos=[trim_window_right_block-132, 95])
         dpg.add_text("ID",  pos=[trim_window_right_block-104, 95])
         dpg.add_text("Rev", pos=[trim_window_right_block-77,  95])
-        dpg.add_text("Left Side Servo Values", pos=[
+        dpg.add_text("Left Side Servo", pos=[
                      trim_window_right_block-30, 95])
 
         # --- 左サーボ列 (L0-L14) ----------------------------------------------------
@@ -1280,7 +1278,7 @@ def create_trim_window():
                            trim_window_right_block+55, base_y], callback=step_trim, user_data=(slider_tag, -1))
             dpg.add_button(label="+", width=18, pos=[
                            trim_window_right_block+77, base_y], callback=step_trim, user_data=(slider_tag, +1))
-
+            '''
             # インプットフィールド
             dpg.add_input_text(tag=f"Input_Trim_L{i}", decimal=True, width=50, pos=[
                                trim_window_right_block+100, base_y])
@@ -1288,11 +1286,12 @@ def create_trim_window():
             # エンターボタン
             dpg.add_button(label="Enter", tag=f"Enter_Trim_L{i}", callback=apply_trim_input_value, user_data=f"L{i}",
                            width=42, pos=[trim_window_right_block+155, base_y])
-
+            '''
+        '''
         # --- 閉じるボタン -----------------------------------------------------------
         dpg.add_button(label="Close", callback=close_trim_window, width=100, pos=[
                        viewport_width//2-50, viewport_height-80])
-
+        '''
 
 # UDP_SEND_IP_DEF = load_udp_send_ip()        # 送信先のESP32のIPアドレス 21
 # UDP_SEND_IP = get_udp_send_ip()
@@ -1362,8 +1361,9 @@ def meridian_loop():
 
     reset_counter()      # 各種カウンターの初期化処理   (reset counterボタンを押すのと同じ)
 
-    while (True):
+    while (mrd.running):
         print("Start.")
+
         # 180個の要素を持つint8型のNumPy配列を作成
         _r_bin_data_past = np.zeros(180, dtype=np.int8)
         _r_bin_data = np.zeros(180, dtype=np.int8)
@@ -1959,6 +1959,9 @@ def reset_counter():  # カウンターのリセット
     mrd.error_servo_id = "None"
     mrd.start = time.time()
 
+def exit_console(): 
+    mrd.running = False
+
 
 # [Button Input] ウィンドウ のリモコンボタン処理
 def pad_btn_panel_on(sender, app_data, user_data):
@@ -2152,19 +2155,37 @@ def redis_sub():
 # ---- dearpyguiによるコンソール画面描写 -----------------------------------------------------------------------------
 # ================================================================================================================
 def main():
-    while (True):
+    while (mrd.running):
 
         # dpg描画処理1 ==========================================================
         dpg.create_context()
-        # dpg.create_viewport(title=TITLE_VERSION, width=853, height=540) #mac/ubuntu
-        dpg.create_viewport(title=TITLE_VERSION, width=870, height=580)  # win
+        #dpg.create_viewport(title=TITLE_VERSION, width=853, height=540) #mac/ubuntu
+        dpg.create_viewport(title=TITLE_VERSION, width=870, height=580)  # win (good for the Trim Setting window)
 
+# ------------------------------------------------------------------------
+# [ Trim window ] : トリム用のウィンドウ(表示位置:上段/左側)
+# ------------------------------------------------------------------------
+        # [ Axis Monitor ] : サーボ位置モニタリング用のウィンドウ(表示位置:上段/左側)
+        create_trim_window()
 
+        '''
+        mrd.trim_setting_window = dpg.window(label="Trim Setting", tag="Trim Setting", width=850, height=560, pos=[5, 5], collapsed=True)
+        with mrd.trim_setting_window:
+            with dpg.group(label='RightSide'):
+                for i in range(0, 15, 1):
+                    dpg.add_slider_float(default_value=0, tag="Trim R"+str(i), label="R"+str(i),
+                                         max_value=180, min_value=-180, callback=set_servo_angle, pos=[10, 35 + i * 20], width=80)
+
+            with dpg.group(label='LeftSide'):
+                for i in range(0, 15, 1):
+                    dpg.add_slider_float(default_value=0, tag="Trim L"+str(i), label="L"+str(i),
+                                         max_value=180, min_value=-180, callback=set_servo_angle, pos=[135, 35 + i * 20], width=80)
+        '''
 # ------------------------------------------------------------------------
 # [ Axis Monitor ] : サーボ位置モニタリング用のウィンドウ(表示位置:上段/左側)
 # ------------------------------------------------------------------------
         # [ Axis Monitor ] : サーボ位置モニタリング用のウィンドウ(表示位置:上段/左側)
-        with dpg.window(label="Axis Monitor", width=250, height=370, pos=[5, 5]):
+        with dpg.window(label="Axis Monitor", width=250, height=390, pos=[5, 5]):
             with dpg.group(label='RightSide'):
                 for i in range(0, 15, 1):
                     dpg.add_slider_float(default_value=0, tag="ID R"+str(i), label="R"+str(i),
@@ -2184,7 +2205,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Message ] : メッセージ表示用ウィンドウ(表示位置:下段/左側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Messege", width=590, height=155, pos=[5, 380]):
+        with dpg.window(label="Messege", width=590, height=155, pos=[5, 400]):
 
             dpg.add_text("disp_send ", pos=[383, 53])
             dpg.add_checkbox(tag="disp_send", callback=set_disp_send, pos=[452, 53])
@@ -2192,6 +2213,7 @@ def main():
             dpg.add_checkbox(tag="disp_rcvd", callback=set_disp_rcvd, pos=[551, 53])
             dpg.add_button(label="ResetCycle", callback=reset_cycle, width=80, pos=[390, 28])
             dpg.add_button(label="ResetCounter", callback=reset_counter, width=90, pos=[480, 28])
+            dpg.add_button(label="Exit", callback=exit_console, width=80, pos=[300, 28])
             dpg.add_text(mrd.message0, tag="DispMessage0")
             dpg.add_text(mrd.message1, tag="DispMessage1")
             dpg.add_text(mrd.message2, tag="DispMessage2")
@@ -2201,7 +2223,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Sensor Monitor ] : センサー値モニタリング用ウィンドウ(表示位置:上段/中央)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Sensor Monitor", width=335, height=175, pos=[260, 5]):
+        with dpg.window(label="Sensor Monitor", width=335, height=175, pos=[260, 25]):
             with dpg.group(label='LeftSide'):
                 dpg.add_slider_float(default_value=0, tag="mpu0", label="ac_x",
                                      max_value=327, min_value=-327, pos=[10, 35], width=60)
@@ -2225,7 +2247,7 @@ def main():
                                      max_value=327, min_value=-327, pos=[10, 95], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu10", label="rol",
                                      max_value=327, min_value=-327, pos=[10, 120], width=60)
-                dpg.add_slider_float(default_value=0, tag="mpu11", label="pit",
+                dpg.add_slider_float(default_value=0, tag="mpu11", label="pith",
                                      max_value=327, min_value=-327, pos=[115, 120], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu12", label="yaw",
                                      max_value=327, min_value=-327, pos=[220, 120], width=60)
@@ -2234,7 +2256,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Command ] : コマンド送信/リモコン値表示用ウィンドウ(表示位置:中段/中央)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Command", width=335, height=190, pos=[260, 185]):
+        with dpg.window(label="Command", width=335, height=190, pos=[260, 205]):
             dpg.add_checkbox(label="Power", tag="Power", callback=set_servo_power, pos=[100, 27])
             dpg.add_checkbox(label="Demo", tag="Action", callback=set_demo_action, pos=[100, 53])
             dpg.add_checkbox(label="Python", tag="python", callback=set_python_action, pos=[100, 76])
@@ -2276,7 +2298,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Button Input ] : リモコン入力コンパネ用ウィンドウ(表示位置:上段/右側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Button Input", width=248, height=155, pos=[600, 5]):
+        with dpg.window(label="Button Input", width=248, height=155, pos=[600, 25]):
             dpg.add_checkbox(tag="Btn_L2",      callback=pad_btn_panel_on, user_data=256, pos=[15, 38])
             dpg.add_checkbox(tag="Btn_L1",      callback=pad_btn_panel_on, user_data=1024, pos=[15, 60])
             dpg.add_checkbox(tag="Btn_L_UP",    callback=pad_btn_panel_on, user_data=16, pos=[42, 80])
@@ -2295,7 +2317,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Mini Terminal ] : コマンド送信用ミニターミナル(表示位置:中段/右側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Mini Terminal", width=248, height=203, pos=[600, 165]):
+        with dpg.window(label="Mini Terminal", width=248, height=203, pos=[600, 185]):
             # with dpg.group(label='LeftSide'):
             dpg.add_text("Index", pos=[15, 25])
             dpg.add_text("Data", pos=[60, 25])
@@ -2449,6 +2471,7 @@ def main():
             dpg.render_dearpygui_frame()
 
             time.sleep(0.003)  # CPUの負荷を下げる
+
         dpg.destroy_context()
 
 
