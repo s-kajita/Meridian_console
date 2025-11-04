@@ -2243,11 +2243,11 @@ def main():
                                      max_value=327, min_value=-327, pos=[115, 75], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu8", label="mg_z",
                                      max_value=327, min_value=-327, pos=[220, 75], width=60)
-                dpg.add_slider_float(default_value=0, tag="mpu9", label="_temp_int16",
+                dpg.add_slider_float(default_value=0, tag="mpu9", label="temperture",
                                      max_value=327, min_value=-327, pos=[10, 95], width=60)
-                dpg.add_slider_float(default_value=0, tag="mpu10", label="rol",
+                dpg.add_slider_float(default_value=0, tag="mpu10", label="roll",
                                      max_value=327, min_value=-327, pos=[10, 120], width=60)
-                dpg.add_slider_float(default_value=0, tag="mpu11", label="pith",
+                dpg.add_slider_float(default_value=0, tag="mpu11", label="pitch",
                                      max_value=327, min_value=-327, pos=[115, 120], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu12", label="yaw",
                                      max_value=327, min_value=-327, pos=[220, 120], width=60)
@@ -2375,10 +2375,7 @@ def main():
                 dpg.set_value("ID R"+str(i), _idrd/100)
 
                 if i < 13:  # IMUデータの更新
-                    if i < 11:
                         dpg.set_value("mpu"+str(i), _idsensor)
-                    else:
-                        dpg.set_value("mpu"+str(i), _idsensor*100)
 
             # リモコンデータの表示更新
             pad_button_short = np.array([0], dtype=np.uint16)
