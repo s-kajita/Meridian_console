@@ -2243,7 +2243,7 @@ def main():
                                      max_value=327, min_value=-327, pos=[115, 75], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu8", label="mg_z",
                                      max_value=327, min_value=-327, pos=[220, 75], width=60)
-                dpg.add_slider_float(default_value=0, tag="mpu9", label="temperture",
+                dpg.add_slider_float(default_value=0, tag="mpu9", label="temperature",
                                      max_value=327, min_value=-327, pos=[10, 95], width=60)
                 dpg.add_slider_float(default_value=0, tag="mpu10", label="roll",
                                      max_value=327, min_value=-327, pos=[10, 120], width=60)
