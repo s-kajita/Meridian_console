@@ -101,6 +101,7 @@ import time
 import atexit
 import struct
 import os
+import csv
 import re
 import redis  # Redis用ライブラリ
 
@@ -253,6 +254,20 @@ class MeridianConsole:
         self.servo_id_values = {}                 # サーボIDの情報(0-255)
         self.servo_l_trim_values_loaded = {}      # EEPROMからLoadしたサーボのトリム値
         self.servo_r_trim_values_loaded = {}      # EEPROMからLoadしたサーボのトリム値
+
+        self.pattern_path = 'patterns/'            # csvパターンファイルの格納ディレクトリ
+        self.flag_play_csv = False                #csvモーションの再生または停止用のflag
+        self.csv_motion = []
+        self.pos_now = np.array([0] * 22)
+        self.flag_csv = 0
+        self.flag_set_csv = 0  #何かしらのフラグ処理に使用
+
+        self.Ttrans = 1.0
+        self.time_start = 0
+        self.pos_start = np.array([0] * 22)
+        self.pos_goal = np.array([0] * 22)
+        self.counter = 0
+        self.csv_name = ''
 
         for i in range(MRD_SERVO_SLOTS):                        # 右側サーボの初期化
             self.servo_direction[f"L{i}"] = False  # 初期値は正回転(チェックなし)
@@ -1601,6 +1616,42 @@ def meridian_loop():
                         # redisからのデータを仮にここで処理
                         fetch_redis_data()
 
+#-------------------------------------------------------------------------------------------------------------------------
+#選ばれているcsvファイルの処理を追加する
+                        if  mrd.flag_play_csv:
+                            
+                            cur_time = time.time()
+                    
+                            time_goal = mrd.Ttrans
+                            calcScoeff(0, time_goal)
+                            dt = cur_time - mrd.time_start
+                            if dt >= mrd.Ttrans:
+                                dt = mrd.Ttrans
+                            s = calcS(dt)
+                            if s >= 1.0:
+                                s = 1.0
+                                
+                            if s < 1.0:
+                                mrd.pos_now = (1-s)*mrd.pos_start + s*mrd.pos_goal                            
+                            else:
+                                if len(mrd.csv_motion) != 0:
+                                    mrd.pos_now = mrd.csv_motion[mrd.counter]
+                                    if mrd.counter < len(mrd.csv_motion) -1:
+                                        mrd.counter += 1
+
+                                        
+                            for i in range(11):
+                                mrd.s_meridim_motion_f[21+i*2] = int(mrd.pos_now[i])
+                                mrd.s_meridim_motion_f[51+i*2] = int(mrd.pos_now[11+i])
+                                
+                            for i in range(11):
+                                    mrd.s_meridim_motion_keep_f[21+i * 2] = mrd.s_meridim_motion_f[21+i*2]
+                                    mrd.s_meridim_motion_keep_f[51+i * 2] = mrd.s_meridim_motion_f[51+i*2]
+                                
+                            if mrd.counter == len(mrd.csv_motion)-1:
+                                mrd.flag_play_csv = False
+
+
                         # if mrd.flag_python_action:  # コード書式は自由だが, 仮にすべての関節角度に0を代入する場合の例
                         #     mrd.s_meridim_motion_f[21] = 0  # 頭ヨー
                         #     mrd.s_meridim_motion_f[23] = 0  # 左肩ピッチ
@@ -2151,6 +2202,78 @@ def redis_sub():
         mrd.flag_redis_sub = True
 
 
+def set_csv_file(sender, app_data, user_data):
+    
+    mrd.csv_name = dpg.get_item_user_data(sender)
+    mrd.flag_csv = flip_number(app_data, f"File {mrd.csv_name} is selected", f"File {mrd.csv_name} is unselected.")
+    
+# matlab ウィンドウ
+def play_csv():
+    print(f"play motion: {mrd.csv_name}")
+
+    set_csv_motion(mrd.pattern_path+mrd.csv_name)   #CSVファイルへのフルパスが必要
+
+    print(f"length={len(mrd.csv_motion)}")
+    
+    mrd.time_start = time.time()
+    mrd.pos_start = np.array([mrd.r_meridim[21], mrd.r_meridim[23], mrd.r_meridim[25], mrd.r_meridim[27], mrd.r_meridim[29], mrd.r_meridim[31], mrd.r_meridim[33], mrd.r_meridim[35], mrd.r_meridim[37], mrd.r_meridim[39], mrd.r_meridim[41], mrd.r_meridim[51], mrd.r_meridim[53], mrd.r_meridim[55], mrd.r_meridim[57], mrd.r_meridim[59], mrd.r_meridim[61], mrd.r_meridim[63], mrd.r_meridim[65], mrd.r_meridim[67], mrd.r_meridim[69], mrd.r_meridim[71]]) / 100.0
+                          
+    if len(mrd.csv_motion) != 0:
+        mrd.pos_goal =  mrd.csv_motion[0]
+    mrd.Ttrans = 1.0
+    mrd.counter = 0
+    
+    mrd.flag_play_csv = True
+
+def stop_csv():
+    
+    #強制的にcsvファイルの再生を停止する
+    mrd.flag_play_csv = False
+    
+#  3次スプライン補間用行列
+def calcScoeff(t1,t2):
+    global Scoeff
+    
+    TM = np.empty((4,4))
+    TM[0,0] = 1.0
+    TM[0,1] = t1
+    TM[0,2] = t1*t1
+    TM[0,3] = t1*t1*t1
+
+    TM[1,0] = 1.0
+    TM[1,1] = t2
+    TM[1,2] = t2*t2
+    TM[1,3] = t2*t2*t2
+
+    TM[2,0] = 0.0
+    TM[2,1] = 1.0
+    TM[2,2] = 2.0*t1
+    TM[2,3] = 3.0*t1*t1
+
+    TM[3,0] = 0.0
+    TM[3,1] = 1.0
+    TM[3,2] = 2.0*t2
+    TM[3,3] = 3.0*t2*t2
+
+    VS = np.empty((4,1)) # VSという４×１の空の配列の作成
+    VS[0,0] = 0.0
+    VS[1,0] = 1.0
+    VS[2,0] = 0.0
+    VS[3,0] = 0.0
+
+
+    TM_inv= np.linalg.inv(TM) # 配列行列TMの逆行列TM_invを求める
+    XX=np.dot(TM_inv,VS) # 行列TM_invと行列VSの積をXXを求める
+    Scoeff =XX #np.resize(XX,(1,4))
+    
+    #print(Scoeff)
+            
+def calcS(t):
+    global Scoeff
+    s=Scoeff[0,0]+Scoeff[1,0]*t+Scoeff[2,0]*t*t+Scoeff[3,0]*t*t*t
+
+    return s
+
 # ================================================================================================================
 # ---- dearpyguiによるコンソール画面描写 -----------------------------------------------------------------------------
 # ================================================================================================================
@@ -2197,7 +2320,7 @@ def main():
                                          max_value=180, min_value=-180, callback=set_servo_angle, pos=[135, 35 + i * 20], width=80)
 
             dpg.add_button(label="Home", callback=set_servo_home, pos=[10, 340], width=40)
-            dpg.add_button(label="Trim", callback=open_trim_window, pos=[55, 340], width=40)
+            #dpg.add_button(label="Trim", callback=open_trim_window, pos=[55, 340], width=40)
             dpg.add_radio_button(label="display_mode", items=["Target", "Actual"], callback=change_display_mode,
                                  default_value="Actual", pos=[100, 340], horizontal=True)
 
@@ -2219,6 +2342,27 @@ def main():
             dpg.add_text(mrd.message2, tag="DispMessage2")
             dpg.add_text(mrd.message3, tag="DispMessage3")
             dpg.add_text(mrd.message4, tag="DispMessage4")
+
+#---------------------------------------------------------------------------
+# [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:中段/中央下)
+# ----------------------------------------------------------------------------          
+        #csv_file表示画面
+        with dpg.window(label="Matlab Motion", width=248, height=175, pos=[600,400]):
+            with dpg.group(label='Centercenterright'):
+            
+                #playボタンを生成
+                dpg.add_button(label="play_csv", callback = play_csv, width=80, pos=[5, 25])
+                dpg.add_button(label="Stop", callback = stop_csv, width=80, pos = [100,25])
+                
+                y = 50
+                dpg.add_text("Select csv file",pos=[5,y])              
+                dpg.add_spacer(height=10)
+                
+                csv_files = [f for f in os.listdir(mrd.pattern_path) if f.endswith('.csv')]   #csvファイルのリスト
+                for file in csv_files:
+                    with dpg.group():                       
+                        y += 20
+                        dpg.add_checkbox(label=f" {file}", callback = set_csv_file, user_data= file, pos = [5,y])
 
 # ------------------------------------------------------------------------
 # [ Sensor Monitor ] : センサー値モニタリング用ウィンドウ(表示位置:上段/中央)
@@ -2470,6 +2614,31 @@ def main():
             time.sleep(0.003)  # CPUの負荷を下げる
 
         dpg.destroy_context()
+
+
+def set_csv_motion(csv_file):
+    #関節の角度数値の確認
+    #print(mrd.pos_now)
+    with open(csv_file) as f:
+        str_array = [row for row in csv.reader(f)]
+        float_array = [[float(v) for v in row] for row in str_array]
+        
+    matlab2meridian = [0, 2,3,4,5, 10,11,12,13,14,15, 1, 6,7,8,9, 16,17,18,19,20,21]
+    
+    
+    matlab2khr_dir = [1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+
+    #matlab2khr_dir = [1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+    
+    csvdata = [[row[i]*matlab2khr_dir[i] for i in matlab2meridian] for row in float_array]
+    
+    motion_khr_walk = np.array(csvdata)
+    
+    mrd.csv_motion = np.rad2deg(motion_khr_walk)
+    
+    mrd.counter = 0
+    #print(mrd.csv_motion)
+    mrd.flag_csv = False
 
 
 # ================================================================================================================
