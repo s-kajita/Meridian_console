@@ -2203,9 +2203,10 @@ def redis_sub():
 
 
 def set_csv_file(sender, app_data, user_data):
-    
-    mrd.csv_name = dpg.get_item_user_data(sender)
-    mrd.flag_csv = flip_number(app_data, f"File {mrd.csv_name} is selected", f"File {mrd.csv_name} is unselected.")
+    csv_name = dpg.get_item_user_data(sender)
+    mrd.flag_csv = flip_number(app_data, f"File {csv_name} is selected", f"File {csv_name} is unselected.")
+    if mrd.flag_csv:
+        mrd.csv_name = csv_name
     
 # matlab ウィンドウ
 def play_csv():
