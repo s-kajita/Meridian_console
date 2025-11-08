@@ -105,6 +105,17 @@ import csv
 import re
 import redis  # Redis用ライブラリ
 
+# データロガー用変数
+MAX_LOG_SIZE = 1000
+from collections import deque     # dequeはリングバッファ
+time_log = deque([],maxlen=MAX_LOG_SIZE)
+Tprof = deque([], maxlen=MAX_LOG_SIZE)    
+
+q_log = deque([], maxlen=MAX_LOG_SIZE)
+qd_log= deque([], maxlen=MAX_LOG_SIZE)
+
+KHR3HV_JOINT_INDEX = [21,23,25,27,29,31,33,35,37,39,41,  51,53,55,57,59,61,63,65,67,69,71]
+
 # ROS搭載マシンの場合はrospyをインポートする
 try:
     import rospy
@@ -268,6 +279,8 @@ class MeridianConsole:
         self.pos_goal = np.array([0] * 22)
         self.counter = 0
         self.csv_name = ''
+
+        self.data_logging = True      # データロギング実行
 
         for i in range(MRD_SERVO_SLOTS):                        # 右側サーボの初期化
             self.servo_direction[f"L{i}"] = False  # 初期値は正回転(チェックなし)
@@ -1390,6 +1403,7 @@ def meridian_loop():
                 _r_bin_data_past = _r_bin_data
                 _r_bin_data, addr = sock.recvfrom(MSG_BUFF)  # UDPに受信したデータを転記
 
+                Tloop0 = time.perf_counter()
 # ------------------------------------------------------------------------
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
@@ -1415,6 +1429,7 @@ def meridian_loop():
                     mrd.flag_disp_rcvd = 1
                     print('rcvd:'+' '.join(map(str, mrd.r_meridim)))
 
+                Tloop1 = time.perf_counter()
 # ------------------------------------------------------------------------
 # [ 2 ] : 受信データのチェック
 # ------------------------------------------------------------------------
@@ -1492,6 +1507,7 @@ def meridian_loop():
                     time.sleep(0.001)
                     mrd.flag_stop_flow = True
 
+
 # ------------------------------------------------------------------------
 # [ 4 ] : チェックOKの受信UDPデータについての処理
 # ------------------------------------------------------------------------
@@ -1546,6 +1562,7 @@ def meridian_loop():
                             for i in range(21, 81, 2):
                                 mrd.s_meridim_motion_keep_f[i] = mrd.s_meridim[i]*0.01
                             mrd.flag_servo_power = 0
+
 
     # ------------------------------------------------------------------------
     # [ 5 ] : 送信用UDPデータの作成
@@ -1863,6 +1880,15 @@ def meridian_loop():
                         # 今回受信のシーケンス番号を次回比較用にキープ
                         mrd.frame_sync_r_last = mrd.frame_sync_r_recv
 
+    #  =================== データロガー (MAX_LOG_SIZEを超えると古いデータより消去される)===============
+                    if mrd.data_logging:
+                        time_log.append(Tloop0)
+
+                        Tloop9 = time.perf_counter()
+                        Tprof.append(Tloop9-Tloop0)
+                        q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
+                        qd_log.append([mrd.s_meridim_motion_f[j].tolist() for j in KHR3HV_JOINT_INDEX])
+
 # ------------------------------------------------------------------------
 # [ 8 ] : シーケンス番号が更新されていなければ待機して[1-1]]に戻る
 # ------------------------------------------------------------------------
@@ -1944,9 +1970,21 @@ def set_servo_home():
             if dpg.does_item_exist(f"Trim_R{i}"):
                 dpg.set_value(f"Trim_R{i}", 0)
 
+
+def save_log_file():
+    mrd.data_logging = False       # ロギング停止
+    logfile_name = 'log.csv'
+    print(f"Save {logfile_name}")
+    f=open(logfile_name, 'w', newline='')
+    writer=csv.writer(f)
+    writer.writerow(['time']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)])
+    for i in range(len(time_log)):
+        writer.writerow([time_log[i]-time_log[0]]+qd_log[i]+q_log[i])
+
+    mrd.data_logging = True       # ロギング再開
+
+
 # [Trim Setting] ウィンドウでのホームボタン処理関数
-
-
 def set_trim_home():
     set_servo_home()
 
@@ -2212,12 +2250,12 @@ def set_csv_file(sender, app_data, user_data):
 def play_csv():
     print(f"play motion: {mrd.csv_name}")
 
-    set_csv_motion(mrd.pattern_path+mrd.csv_name)   #CSVファイルへのフルパスが必要
+    set_csv_motion(mrd.pattern_path+mrd.csv_name)
 
     print(f"length={len(mrd.csv_motion)}")
     
     mrd.time_start = time.time()
-    mrd.pos_start = np.array([mrd.r_meridim[21], mrd.r_meridim[23], mrd.r_meridim[25], mrd.r_meridim[27], mrd.r_meridim[29], mrd.r_meridim[31], mrd.r_meridim[33], mrd.r_meridim[35], mrd.r_meridim[37], mrd.r_meridim[39], mrd.r_meridim[41], mrd.r_meridim[51], mrd.r_meridim[53], mrd.r_meridim[55], mrd.r_meridim[57], mrd.r_meridim[59], mrd.r_meridim[61], mrd.r_meridim[63], mrd.r_meridim[65], mrd.r_meridim[67], mrd.r_meridim[69], mrd.r_meridim[71]]) / 100.0
+    mrd.pos_start = np.array([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
                           
     if len(mrd.csv_motion) != 0:
         mrd.pos_goal =  mrd.csv_motion[0]
@@ -2324,6 +2362,7 @@ def main():
             #dpg.add_button(label="Trim", callback=open_trim_window, pos=[55, 340], width=40)
             dpg.add_radio_button(label="display_mode", items=["Target", "Actual"], callback=change_display_mode,
                                  default_value="Actual", pos=[100, 340], horizontal=True)
+            dpg.add_button(label="Save Log", callback=save_log_file, pos=[10,360], width=70)
 
 
 # ------------------------------------------------------------------------
