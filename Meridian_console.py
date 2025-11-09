@@ -1973,7 +1973,7 @@ def set_servo_home():
 
 def save_log_file():
     mrd.data_logging = False       # ロギング停止
-    logfile_name = 'log.csv'
+    logfile_name = 'logs/log.csv'
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)

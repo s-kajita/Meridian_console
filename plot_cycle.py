@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-file_name = "log.csv"
+file_name = "logs/log.csv"
 
 df = pd.read_csv(file_name)
 
