@@ -109,6 +109,9 @@ import redis  # Redis用ライブラリ
 MAX_LOG_SIZE = 1000
 from collections import deque     # dequeはリングバッファ
 time_log = deque([],maxlen=MAX_LOG_SIZE)
+board_frame_log = deque([],maxlen=MAX_LOG_SIZE)
+pc_frame_log = deque([],maxlen=MAX_LOG_SIZE)
+
 Tprof = deque([], maxlen=MAX_LOG_SIZE)    
 
 q_log = deque([], maxlen=MAX_LOG_SIZE)
@@ -1403,13 +1406,14 @@ def meridian_loop():
                 _r_bin_data_past = _r_bin_data
                 _r_bin_data, addr = sock.recvfrom(MSG_BUFF)  # UDPに受信したデータを転記
 
-                Tloop0 = time.perf_counter()
 # ------------------------------------------------------------------------
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
 # [ 1-1 ] : UDPデータの受信を待つループ
                 while np.array_equal(_r_bin_data_past, _r_bin_data):  # 前回受信データと差分があったら進む
                     _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
+
+                Tloop0 = time.perf_counter()    #　最新のUDPを受信した時刻
 
 # [ 1-2 ] : 受信UDPデータの変換
                 # 受信データをshort型のMeridim90に変換
@@ -1880,9 +1884,11 @@ def meridian_loop():
                         # 今回受信のシーケンス番号を次回比較用にキープ
                         mrd.frame_sync_r_last = mrd.frame_sync_r_recv
 
-    #  =================== データロガー (MAX_LOG_SIZEを超えると古いデータより消去される)===============
+    #  =================== データロガー (MAX_LOG_SIZEを超えると古い順に消去される)===============
                     if mrd.data_logging:
                         time_log.append(Tloop0)
+                        board_frame_log.append(mrd.frame_sync_r_recv)
+                        pc_frame_log.append(mrd.loop_count)
 
                         Tloop9 = time.perf_counter()
                         Tprof.append(Tloop9-Tloop0)
@@ -1977,9 +1983,9 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    writer.writerow(['time']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)])
+    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)])
     for i in range(len(time_log)):
-        writer.writerow([time_log[i]-time_log[0]]+qd_log[i]+q_log[i])
+        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i])
 
     mrd.data_logging = True       # ロギング再開
 
@@ -2651,7 +2657,7 @@ def main():
             # dpg表示更新処理
             dpg.render_dearpygui_frame()
 
-            time.sleep(0.003)  # CPUの負荷を下げる
+            time.sleep(0.05)  # CPUの負荷を下げる  0.003
 
         dpg.destroy_context()
 
