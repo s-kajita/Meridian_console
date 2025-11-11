@@ -16,7 +16,7 @@ plt.xlabel('[ms]')
 plt.ylabel('frequency')
 
 plt.subplot(212)
-plt.plot(time[0:-1],cycle,'.-')
+plt.plot(time[0:-1],cycle,'.-',time,1000.0*df['Trecv'],'r')
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 

@@ -112,10 +112,11 @@ time_log = deque([],maxlen=MAX_LOG_SIZE)
 board_frame_log = deque([],maxlen=MAX_LOG_SIZE)
 pc_frame_log = deque([],maxlen=MAX_LOG_SIZE)
 
-Tprof = deque([], maxlen=MAX_LOG_SIZE)    
-
 q_log = deque([], maxlen=MAX_LOG_SIZE)
 qd_log= deque([], maxlen=MAX_LOG_SIZE)
+
+Trecv_log = deque([], maxlen=MAX_LOG_SIZE)   
+Tprof_log = deque([], maxlen=MAX_LOG_SIZE)   
 
 KHR3HV_JOINT_INDEX = [21,23,25,27,29,31,33,35,37,39,41,  51,53,55,57,59,61,63,65,67,69,71]
 
@@ -1402,18 +1403,18 @@ def meridian_loop():
 
         with closing(sock):
             while True:
-                mrd.loop_count += 1  # このpythonを起動してからのフレーム数をカウントアップ
-                _r_bin_data_past = _r_bin_data
-                _r_bin_data, addr = sock.recvfrom(MSG_BUFF)  # UDPに受信したデータを転記
-
+                Tloop0 = time.perf_counter()    #　ループ開始
 # ------------------------------------------------------------------------
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
 # [ 1-1 ] : UDPデータの受信を待つループ
+                _r_bin_data_past = _r_bin_data
+                _r_bin_data, addr = sock.recvfrom(MSG_BUFF)  # UDPに受信したデータを転記
                 while np.array_equal(_r_bin_data_past, _r_bin_data):  # 前回受信データと差分があったら進む
                     _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
 
-                Tloop0 = time.perf_counter()    #　最新のUDPを受信した時刻
+                mrd.loop_count += 1  # このpythonを起動してからのフレーム数をカウントアップ
+                Tloop1 = time.perf_counter()    #　最新のUDPを受信した時刻
 
 # [ 1-2 ] : 受信UDPデータの変換
                 # 受信データをshort型のMeridim90に変換
@@ -1433,7 +1434,7 @@ def meridian_loop():
                     mrd.flag_disp_rcvd = 1
                     print('rcvd:'+' '.join(map(str, mrd.r_meridim)))
 
-                Tloop1 = time.perf_counter()
+                Tloop2 = time.perf_counter()
 # ------------------------------------------------------------------------
 # [ 2 ] : 受信データのチェック
 # ------------------------------------------------------------------------
@@ -1890,8 +1891,10 @@ def meridian_loop():
                         board_frame_log.append(mrd.frame_sync_r_recv)
                         pc_frame_log.append(mrd.loop_count)
 
+                        Trecv = Tloop1 - Tloop0    #UDPの受信待ち時間
+                        Trecv_log.append(Trecv)
                         Tloop9 = time.perf_counter()
-                        Tprof.append(Tloop9-Tloop0)
+                        Tprof_log.append(Tloop9-Tloop0)
                         q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
                         qd_log.append([mrd.s_meridim_motion_f[j].tolist() for j in KHR3HV_JOINT_INDEX])
 
@@ -1983,9 +1986,9 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)])
+    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv'])
     for i in range(len(time_log)):
-        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i])
+        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i]])
 
     mrd.data_logging = True       # ロギング再開
 
@@ -2692,3 +2695,4 @@ if __name__ == '__main__':  # スレッド2つで送受信と画面描写を並�
     thread1 = threading.Thread(target=meridian_loop)  # サブスレッドでフラグ監視・通信処理・計算処理
     thread1.start()
     main()  # メインスレッドでdearpygui描写
+
