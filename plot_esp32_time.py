@@ -9,25 +9,18 @@ df = pd.read_csv(file_name)
 
 plt.figure()
 time = np.array(df['time'])
-cycle = 1000.0*np.diff(time)   # [ms]
-
+esp32_time = np.array(df['esp32_time'])  
 board_frame = np.array(df['board_frame'])
-pc_frame = np.array(df['pc_frame'])
-
-board_frame -= board_frame[0]
-pc_frame -= pc_frame[0]
 
 plt.subplot(211)
-plt.plot(time, board_frame)
-plt.plot(time, pc_frame)
-plt.xlabel('time[s]')
-plt.ylabel('[steps]')
+plt.plot(time[0:-1],np.diff(board_frame))
+plt.xlabel('time [s]')
+plt.ylabel('increment')
 plt.title(os.path.basename(__file__))
 
 plt.subplot(212)
-plt.plot(time[0:-1],np.diff(board_frame))
-plt.plot(time[0:-1],np.diff(pc_frame))
-plt.ylabel('[step]')
+plt.plot(time[0:-1],np.diff(esp32_time))
+plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
 plt.show()

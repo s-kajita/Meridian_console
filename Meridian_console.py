@@ -111,6 +111,7 @@ from collections import deque     # dequeはリングバッファ
 time_log = deque([],maxlen=MAX_LOG_SIZE)
 board_frame_log = deque([],maxlen=MAX_LOG_SIZE)
 pc_frame_log = deque([],maxlen=MAX_LOG_SIZE)
+esp32_time_log = deque([], maxlen=MAX_LOG_SIZE)
 
 q_log = deque([], maxlen=MAX_LOG_SIZE)
 qd_log= deque([], maxlen=MAX_LOG_SIZE)
@@ -225,6 +226,8 @@ class MeridianConsole:
         self.error_count_servo_skip = 0  # マイコン(Teensy/ESP32)がサーボ値の受信に失敗した回数
         self.error_servo_id = "None"     # 受信エラーのあったサーボのIDを格納
         self.error_servo_id_past = 0     # 前回のサーボエラーIDキープ用
+
+        self.esp32_time = 0              # ESP32の時刻 [ms]
 
         # 制御コマンド用フラグ等
         self.command_send_trial = 1               # Commandを連続で送信する回数
@@ -1499,6 +1502,8 @@ def meridian_loop():
                     _temp_int16 = mrd.r_meridim[MSG_ERRS] & 0b0111111111111111
                     # フレームスキップチェック用のカウントの代入
                     mrd.frame_sync_r_recv = mrd.r_meridim_ushort[1]
+                    # ESP32の起動からの計画時刻 [ms]
+                    mrd.esp32_time = mrd.r_meridim_ushort[80]
 
 # ------------------------------------------------------------------------
 # [ 3 ] : ステップモードの場合はここでループ待機
@@ -1878,7 +1883,7 @@ def meridian_loop():
                         mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(mrd.error_count_esp_to_pc/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
                             mrd.error_count_esp_to_tsy/mrd.loop_count)) + " TsySKIP:"+str("{:.2%}".format(mrd.error_count_tsy_skip/mrd.loop_count)) + " ESPSKIP:" + str("{:.2%}".format(mrd.error_count_esp_skip/mrd.loop_count))
                         mrd.message4 = "SKIP COUNT Tsy:" + str("{:}".format(mrd.error_count_tsy_skip))+" ESP:"+str("{:}".format(mrd.error_count_esp_skip))+" PC:"+str("{:}".format(mrd.error_count_pc_skip)) + " Servo:"+str(
-                            "{:}".format(mrd.error_count_servo_skip))+" PCframe:"+str(mrd.loop_count)+" BOARDframe:"+str(mrd.frame_sync_r_recv)+" "+str(int(mrd.loop_count/now))+"Hz"
+                            "{:}".format(mrd.error_count_servo_skip))+" PCframe:"+str(mrd.loop_count)+" BOARDframe:"+str(mrd.frame_sync_r_recv)+" "+str(int(mrd.loop_count/now))+"Hz "+str(int(mrd.esp32_time))
                         '''
                         mrd.message4 = "time="+str(time.time())+"  mrd.start="+str(mrd.start)+" now "+str(now)
                         '''
@@ -1890,6 +1895,7 @@ def meridian_loop():
                         time_log.append(Tloop0)
                         board_frame_log.append(mrd.frame_sync_r_recv)
                         pc_frame_log.append(mrd.loop_count)
+                        esp32_time_log.append(mrd.esp32_time)
 
                         Trecv = Tloop1 - Tloop0    #UDPの受信待ち時間
                         Trecv_log.append(Trecv)
@@ -1986,9 +1992,9 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv'])
+    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv','esp32_time'])
     for i in range(len(time_log)):
-        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i]])
+        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i], esp32_time_log[i]])
 
     mrd.data_logging = True       # ロギング再開
 
