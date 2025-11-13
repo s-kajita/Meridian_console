@@ -20,6 +20,7 @@ plt.title(os.path.basename(__file__))
 
 plt.subplot(212)
 plt.plot(time[0:-1],np.diff(esp32_time))
+plt.ylim(-2,50)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
