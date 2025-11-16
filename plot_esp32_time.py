@@ -9,7 +9,7 @@ df = pd.read_csv(file_name)
 
 plt.figure()
 time = np.array(df['time'])
-esp32_time = np.array(df['esp32_time'])  
+esp32_time = np.array(df['esp32_time0'])  
 board_frame = np.array(df['board_frame'])
 
 plt.subplot(211)
@@ -20,7 +20,7 @@ plt.title(os.path.basename(__file__))
 
 plt.subplot(212)
 plt.plot(time[0:-1],np.diff(esp32_time))
-plt.ylim(-2,50)
+plt.ylim(-2,40)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 

@@ -105,7 +105,7 @@ import csv
 import re
 import redis  # Redis用ライブラリ
 
-# データロガー用変数
+# ------------ データロガー用変数 ---------
 MAX_LOG_SIZE = 1000
 from collections import deque     # dequeはリングバッファ
 time_log = deque([],maxlen=MAX_LOG_SIZE)
@@ -115,6 +115,10 @@ esp32_time_log = deque([], maxlen=MAX_LOG_SIZE)
 
 q_log = deque([], maxlen=MAX_LOG_SIZE)
 qd_log= deque([], maxlen=MAX_LOG_SIZE)
+
+acc_log  = deque([], maxlen=MAX_LOG_SIZE)
+gyro_log = deque([], maxlen=MAX_LOG_SIZE)
+rpy_log  = deque([], maxlen=MAX_LOG_SIZE)
 
 Trecv_log = deque([], maxlen=MAX_LOG_SIZE)   
 Tprof_log = deque([], maxlen=MAX_LOG_SIZE)   
@@ -144,6 +148,9 @@ MSG_CKSM = MSG_SIZE - 1                     # Meridim配列のチェックサム
 STEP = 94                                   # 1フレームあたりに増加させる制御処理用の数値,サインカーブを何分割するか
 MRD_L_ORIG_IDX = 20                         # Meridim配列のL系統の最初のインデックス(デフォルトは20)
 MRD_R_ORIG_IDX = 50                         # Meridim配列のR系統の最初のインデックス(デフォルトは50)
+MRD_ACC_IDX    = [2,3,4]                    # Meridim配列の加速度センサ(x,y,z)のインデックス 
+MRD_GYRO_IDX   = [5,6,7]                    # Meridim配列の角速度センサ(ジャイロ x,y,z)のインデックス 
+MRD_RPY_IDX    = [12,13,14]                 # Meridim配列のRoll,Pitch,Yawのインデックス
 # Meridim配列の1系統あたりの最大接続サーボ数(デフォルトは15)
 MRD_SERVO_SLOTS = 15
 
@@ -1502,8 +1509,8 @@ def meridian_loop():
                     _temp_int16 = mrd.r_meridim[MSG_ERRS] & 0b0111111111111111
                     # フレームスキップチェック用のカウントの代入
                     mrd.frame_sync_r_recv = mrd.r_meridim_ushort[1]
-                    # ESP32の起動からの計画時刻 [ms]
-                    mrd.esp32_time = mrd.r_meridim_ushort[80]
+                    # ESP32の起動からの時刻 [ms]
+                    mrd.esp32_time = [mrd.r_meridim_ushort[idx] for idx in [80,81,82,83]]
 
 # ------------------------------------------------------------------------
 # [ 3 ] : ステップモードの場合はここでループ待機
@@ -1883,7 +1890,7 @@ def meridian_loop():
                         mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(mrd.error_count_esp_to_pc/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
                             mrd.error_count_esp_to_tsy/mrd.loop_count)) + " TsySKIP:"+str("{:.2%}".format(mrd.error_count_tsy_skip/mrd.loop_count)) + " ESPSKIP:" + str("{:.2%}".format(mrd.error_count_esp_skip/mrd.loop_count))
                         mrd.message4 = "SKIP COUNT Tsy:" + str("{:}".format(mrd.error_count_tsy_skip))+" ESP:"+str("{:}".format(mrd.error_count_esp_skip))+" PC:"+str("{:}".format(mrd.error_count_pc_skip)) + " Servo:"+str(
-                            "{:}".format(mrd.error_count_servo_skip))+" PCframe:"+str(mrd.loop_count)+" BOARDframe:"+str(mrd.frame_sync_r_recv)+" "+str(int(mrd.loop_count/now))+"Hz "+str(int(mrd.esp32_time))
+                            "{:}".format(mrd.error_count_servo_skip))+" PCframe:"+str(mrd.loop_count)+" BOARDframe:"+str(mrd.frame_sync_r_recv)+" "+str(int(mrd.loop_count/now))+"Hz "+str(int(mrd.esp32_time[0]))
                         '''
                         mrd.message4 = "time="+str(time.time())+"  mrd.start="+str(mrd.start)+" now "+str(now)
                         '''
@@ -1903,6 +1910,10 @@ def meridian_loop():
                         Tprof_log.append(Tloop9-Tloop0)
                         q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
                         qd_log.append([mrd.s_meridim_motion_f[j].tolist() for j in KHR3HV_JOINT_INDEX])
+
+                        acc_log.append( [mrd.r_meridim[j]*0.01 for j in MRD_ACC_IDX])
+                        gyro_log.append([mrd.r_meridim[j]*0.01 for j in MRD_GYRO_IDX])
+                        rpy_log.append( [mrd.r_meridim[j]*0.01 for j in MRD_RPY_IDX])
 
 # ------------------------------------------------------------------------
 # [ 8 ] : シーケンス番号が更新されていなければ待機して[1-1]]に戻る
@@ -1992,9 +2003,13 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    writer.writerow(['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv','esp32_time'])
+    labels = ['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv']+['esp32_time'+str(i) for i in [0,1,2,3]]
+    labels += ['acc_x','acc_y','acc_z','gyro_x','gyro_y','gyro_z','roll','pitch','yaw']
+    writer.writerow(labels)
     for i in range(len(time_log)):
-        writer.writerow([time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i], esp32_time_log[i]])
+        logdata = [time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i]] + esp32_time_log[i]
+        logdata += acc_log[i]+gyro_log[i]+rpy_log[i]
+        writer.writerow(logdata)
 
     mrd.data_logging = True       # ロギング再開
 
@@ -2564,17 +2579,17 @@ def main():
             dpg.set_value("DispMessage3", mrd.message3)
             dpg.set_value("DispMessage4", mrd.message4)
 
-            # サーボデータとIMUデータの表示更新
+            # サーボデータの表示更新
             for i in range(0, 15, 1):
                 _idld = mrd.d_meridim[MRD_L_ORIG_IDX + 1 + i * 2]
                 _idrd = mrd.d_meridim[MRD_R_ORIG_IDX + 1 + i * 2]
-                _idsensor = mrd.r_meridim[i+2]/100
-                #_idsensor = mrd.r_meridim[i+2]/10000
                 dpg.set_value("ID L"+str(i), _idld/100)  # サーボIDと数値の表示
                 dpg.set_value("ID R"+str(i), _idrd/100)
 
-                if i < 13:  # IMUデータの更新
-                        dpg.set_value("mpu"+str(i), _idsensor)
+            # IMUデータの表示更新
+            for i in range(0, 13, 1):
+                _idsensor = mrd.r_meridim[i+2]/100
+                dpg.set_value("mpu"+str(i), _idsensor)
 
             # リモコンデータの表示更新
             pad_button_short = np.array([0], dtype=np.uint16)
