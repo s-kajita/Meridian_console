@@ -16,26 +16,27 @@ gyro = np.array(df[gyro_labels])
 rpy_labels = ['roll','pitch','yaw']
 rpy = np.array(df[rpy_labels])
 
+d_rpy = np.diff(rpy,axis=0)/0.01
+
 plt.subplot(311)
-plt.plot(time,acc)
-plt.legend(acc_labels)
+plt.plot(time,gyro)
+plt.legend(gyro_labels)
+#plt.ylim(-20,20)
+plt.ylabel('[?]')
 plt.xlabel('time [s]')
-plt.ylabel('[m/s^2]')
 plt.title(os.path.basename(__file__))
 
 plt.subplot(312)
-plt.plot(time,gyro)
-plt.legend(gyro_labels)
-plt.ylim(-20,20)
+plt.plot(time[0:-1],d_rpy)
+plt.legend(['droll','dpitch','dyaw'])
 plt.ylabel('[deg/s]')
 plt.xlabel('time [s]')
 
 plt.subplot(313)
-plt.plot(time,rpy)
-plt.legend(rpy_labels)
-plt.ylabel('[deg]')
+plt.plot(time[0:-1],d_rpy[:,1],time,gyro[:,1])
+plt.legend(['dpitch','gyro_y'])
+plt.ylabel('[deg/s]')
 plt.xlabel('time [s]')
-
 
 
 plt.show()
