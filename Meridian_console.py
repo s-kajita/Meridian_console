@@ -1413,7 +1413,7 @@ def meridian_loop():
 
         with closing(sock):
             while True:
-                Tloop0 = time.perf_counter()    #　ループ開始
+                T_loop_start = time.perf_counter()    #　ループ開始
 # ------------------------------------------------------------------------
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
@@ -1899,15 +1899,15 @@ def meridian_loop():
 
     #  =================== データロガー (MAX_LOG_SIZEを超えると古い順に消去される)===============
                     if mrd.data_logging:
-                        time_log.append(Tloop0)
+                        time_log.append(T_loop_start)
                         board_frame_log.append(mrd.frame_sync_r_recv)
                         pc_frame_log.append(mrd.loop_count)
                         esp32_time_log.append(mrd.esp32_time)
 
-                        Trecv = Tloop1 - Tloop0    #UDPの受信待ち時間
+                        Trecv = Tloop1 - T_loop_start    #UDPの受信待ち時間
                         Trecv_log.append(Trecv)
                         Tloop9 = time.perf_counter()
-                        Tprof_log.append(Tloop9-Tloop0)
+                        Tprof_log.append(Tloop9-T_loop_start)
                         q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
                         qd_log.append([mrd.s_meridim_motion_f[j].tolist() for j in KHR3HV_JOINT_INDEX])
 
