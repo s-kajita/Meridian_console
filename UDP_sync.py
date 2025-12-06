@@ -15,7 +15,7 @@ MSG_SIZE = 90                               # Meridim配列の長さ(デフォ�
 MSG_BUFF = MSG_SIZE * 2                     # Meridim配列のバイト長さ
 # ------------ データロガー用変数 ---------
 
-MAX_LOG_SIZE = 1000
+MAX_LOG_SIZE = 2000
 from collections import deque     # dequeはリングバッファ
 time_log = deque([],maxlen=MAX_LOG_SIZE)
 Nrcv_log = deque([],maxlen=MAX_LOG_SIZE) 
@@ -33,7 +33,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP用のsocket設定
 sock.bind((UDP_RECV_IP_DEF, UDP_RECV_PORT))
 
 
-print("Start.")
+
 
 # 180個の要素を持つint8型のNumPy配列を作成
 _r_bin_data = np.zeros(180, dtype=np.int8)
@@ -42,23 +42,37 @@ sock.settimeout(0)  # 非ブロッキングモード
 #sock.settimeout(0.0003)
 
 tau_avg = 0
-for n in range(1000):
+NoUDP = 0
+TotalN = 1500
+#TotalN = 5000
+tau_ctrl = 0     # 受信周期調整項
+tau_d = 0.0025   # 目標受信タイミング [s]
+tau_end = 0.005  # UDP受信ウィンドウの終わり
+print(f"Receiving UDP for {TotalN/100} s")
+for n in range(TotalN):
     Tcycle = Tnow = time.perf_counter()    #　UDP受信時刻
     Nrcv = 0
     tau = 0.0
-    while Tnow - Tcycle < 0.01:
-        received = True
-        try:
-            _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
-        #except socket.timeout:
-        #    received = False
-        except socket.error as e:
-            received = False
+    while Tnow - Tcycle < 0.01+tau_ctrl:
         Tnow = time.perf_counter()
-        if received:
-            Nrcv += 1
-            tau = Tnow - Tcycle
-            tau_avg += 0.02*(-tau_avg + tau)
+        if Tnow - Tcycle < tau_end:
+            received = True
+            try:
+                _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
+            #except socket.timeout:
+            #    received = False
+            except socket.error as e:
+                received = False
+            if received:
+                Nrcv += 1
+                tau = Tnow - Tcycle
+                tau_avg += 0.01*(-tau_avg + tau)  # smoothing
+
+    if Nrcv == 0:
+        NoUDP += 1  # count 
+
+    if n > 300:
+        tau_ctrl = 0.005*(tau_avg - tau_d)    # UDP receive timing control
 
     time_log.append(Tcycle)
     Nrcv_log.append(Nrcv)
@@ -75,9 +89,11 @@ for n in range(1000):
             break
 '''
 sock.close()
-print("End.") 
+print("Finished.") 
 
-#---------------------
+print(f"{NoUDP} failed UDP receive out of {TotalN} attempts, {(NoUDP/TotalN)*100:.1f} %")
+
+#------------ save log ---------
 logfile_name = 'logs/udp_sync.csv'
 print(f"Save {logfile_name}")
 f=open(logfile_name, 'w', newline='')
@@ -89,12 +105,38 @@ for i in range(len(time_log)):
     writer.writerow(logdata)
 f.close()
 
-#-------------------
-df = pd.read_csv(logfile_name)
 
-plt.figure()
+df = pd.read_csv(logfile_name)
 t_log = np.array(df['time'])
 t_log -= t_log[0]
+
+#----------- plot ESP32 log -----------
+plt.figure()
+esp32_t = np.array(df['esp32_time0']) 
+esp32_t -= esp32_t[0]
+esp32_cycle = np.diff(esp32_t)
+
+plt.subplot(211)
+plt.title(os.path.basename(__file__))
+plt.plot(t_log, df['esp32_time0'])
+plt.legend(['esp32_time0'])
+plt.xlabel('time [s]')
+'''
+plt.hist(esp32_cycle,bins=100)
+plt.xlim(0,50)
+plt.xlabel('[ms]')
+plt.ylabel('frequency')
+'''
+
+plt.subplot(212)
+plt.plot(t_log[1:],np.diff(esp32_t))
+plt.legend(['ESP32 cycle'])
+plt.ylim(0,50)
+plt.ylabel('[ms]')
+plt.xlabel('time [s]')
+
+#------------ plot UDP log ------
+plt.figure()
 cycle = 1000.0*np.diff(t_log)
 
 '''
@@ -108,7 +150,7 @@ plt.title(os.path.basename(__file__))
 plt.subplot(311)
 plt.plot(t_log[1:],cycle,'.-')
 plt.legend(['Python cycle'])
-plt.ylim(0,15)
+plt.ylim(0,12)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 plt.title(os.path.basename(__file__))
@@ -119,32 +161,11 @@ plt.ylabel('Nrcv')
 plt.xlabel('time [s]')
 
 plt.subplot(313)
-plt.plot(t_log,1000*df['tau'],'.-',t_log,1000*df['tau_avg'])
-plt.legend(['tau','tau_avg'])
+plt.plot(t_log,1000*df['tau'],'.-',t_log,1000*df['tau_avg'],t_log[[0,-1]],[tau_d*1000,tau_d*1000],'r--')
+plt.legend(['tau','tau_avg','tau_d'])
+plt.ylim(0,12)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
-
-#----------------------
-plt.figure()
-esp32_t = np.array(df['esp32_time0']) 
-esp32_t -= esp32_t[0]
-esp32_cycle = np.diff(esp32_t)
-
-plt.subplot(211)
-plt.hist(esp32_cycle,bins=100)
-plt.xlim(0,50)
-plt.xlabel('[ms]')
-plt.ylabel('frequency')
-plt.title(os.path.basename(__file__))
-
-plt.subplot(212)
-plt.plot(esp32_t[1:]*0.001,np.diff(esp32_t))
-plt.legend(['ESP32 cycle'])
-plt.ylim(0,50)
-plt.ylabel('[ms]')
-plt.xlabel('time [s]')
-
-
 
 
 plt.show()

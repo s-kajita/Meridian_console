@@ -12,13 +12,15 @@ time = np.array(df['time'])
 cycle = 1000.0*np.diff(time)
 
 plt.subplot(211)
-plt.hist(cycle,bins=100)
+plt.hist(cycle,bins=50)
+#plt.xlim(0,15)
 plt.xlabel('[ms]')
 plt.ylabel('frequency')
 plt.title(os.path.basename(__file__))
 
 plt.subplot(212)
 plt.plot(time[0:-1],cycle,'.-',time,1000.0*df['Trecv'],'r')
+plt.legend(['Tcycle','Trecv'])
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
