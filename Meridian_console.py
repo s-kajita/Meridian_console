@@ -434,7 +434,11 @@ def select_network_mode_and_ip(filename="board_ip.txt"):
                     pass
                 print("Please enter 0, 1, or 2.")
             for key in ['SEND', 'RECV']:
-                label = f"Enter the {key} IP for {mode_labels[network_mode]} (current: {ip_table[network_mode][key]}):"
+                if key == 'SEND':
+                    system_name = 'ROBOT'
+                else:
+                    system_name = 'HOST PC'
+                label = f"Enter the {system_name} IP for {mode_labels[network_mode]} (current: {ip_table[network_mode][key]}):"
                 while True:
                     ip_in = input(label).strip()
                     if ip_in == '':
