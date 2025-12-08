@@ -6,6 +6,9 @@ import os
 file_name = "logs/log.csv"
 
 df = pd.read_csv(file_name)
+Trecv = df['Trecv']
+Trecv_failed = (Trecv == 0.0)
+print(f"UDP receive failed: {(sum(Trecv_failed)/len(Trecv))*100:3.1f} %" )
 
 plt.figure()
 

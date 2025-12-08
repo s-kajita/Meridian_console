@@ -33,7 +33,7 @@ UDP_SEND_IP = UDP_SEND_IP_DEF
 UDP_sync_finished = False
 
 TAU_cycle = 0.01   # メインループサイクル [s]
-tau_udp = 0.0025   # 目標受信タイミング [s]
+tau_udp = 0.002 # 目標受信タイミング [s]
 tau_window = 0.005  # UDP受信ウィンドウのサイズ [s]
 
 def udp_sync():
