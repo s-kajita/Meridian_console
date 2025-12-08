@@ -8,12 +8,13 @@ file_name = "logs/log.csv"
 df = pd.read_csv(file_name)
 
 plt.figure()
+
 time = np.array(df['time'])
 cycle = 1000.0*np.diff(time)
+hist_range = (0,max(15,max(cycle)))
 
 plt.subplot(211)
-plt.hist(cycle,bins=50)
-#plt.xlim(0,15)
+plt.hist(cycle,range=hist_range,bins=100)
 plt.xlabel('[ms]')
 plt.ylabel('frequency')
 plt.title(os.path.basename(__file__))
