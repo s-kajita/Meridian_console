@@ -2727,9 +2727,9 @@ def set_csv_motion(csv_file):
         str_array = [row for row in csv.reader(f)]
         float_array = [[float(v) for v in row] for row in str_array]
         
-    matlab2meridian = [0, 2,3,4,5, 10,11,12,13,14,15, 1, 6,7,8,9, 16,17,18,19,20,21]
+    matlab2meridian = [1, 2,3,4,5, 10,11,12,13,14,15, 0, 6,7,8,9, 16,17,18,19,20,21]
         
-    matlab2khr_dir = [1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+    matlab2khr_dir = [-1, -1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
 
     
     csvdata = [[row[i]*matlab2khr_dir[i] for i in matlab2meridian] for row in float_array]
