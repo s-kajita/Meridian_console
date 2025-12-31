@@ -8,7 +8,8 @@ file_name = "logs/log.csv"
 df = pd.read_csv(file_name)
 Trecv = df['Trecv']
 Trecv_failed = (Trecv == 0.0)
-print(f"UDP receive failed: {(sum(Trecv_failed)/len(Trecv))*100:3.1f} %" )
+Failed_percent = (sum(Trecv_failed)/len(Trecv))*100
+print(f"UDP receive failed: {Failed_percent:3.1f} %" )
 
 plt.figure()
 
@@ -20,7 +21,7 @@ plt.subplot(211)
 plt.hist(cycle,range=hist_range,bins=100)
 plt.xlabel('[ms]')
 plt.ylabel('frequency')
-plt.title(os.path.basename(__file__))
+plt.title(os.path.basename(__file__)+f" / UDP receive failed: {Failed_percent:3.1f} %")
 
 plt.subplot(212)
 plt.plot(time[0:-1],cycle,'.-',time,1000.0*df['Trecv'],'r')
