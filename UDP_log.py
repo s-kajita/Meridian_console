@@ -15,7 +15,7 @@ MSG_SIZE = 90                               # Meridim配列の長さ(デフォ�
 MSG_BUFF = MSG_SIZE * 2                     # Meridim配列のバイト長さ
 # ------------ データロガー用変数 ---------
 
-MAX_LOG_SIZE = 1000
+MAX_LOG_SIZE = 1500
 from collections import deque     # dequeはリングバッファ
 time_log = deque([],maxlen=MAX_LOG_SIZE)
 esp32_time_log = deque([],maxlen=MAX_LOG_SIZE)
