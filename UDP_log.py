@@ -145,18 +145,23 @@ _r_bin_data_past = np.zeros(180, dtype=np.int8)
 _r_bin_data = np.zeros(180, dtype=np.int8)
 
 with closing(sock):
-    for n in range(1000):
+    Tstart = time.perf_counter()
+    Tdisp = 1.0;
+    for n in range(1500):
         _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
         T_recv = time.perf_counter()    #　UDP受信時刻
         time_log.append(T_recv)
         r_meridim_ushort = struct.unpack('90H', _r_bin_data)  # unsignedshort型
         esp32_time = [r_meridim_ushort[idx] for idx in [80,81,82,83]]
         esp32_time_log.append(esp32_time)
+        if T_recv-Tstart >= Tdisp:
+            print(f"time = {Tdisp}")
+            Tdisp += 1.0
 
 print("End.") 
 
 #---------------------
-logfile_name = 'logs/udp_check.csv'
+logfile_name = 'logs/udp_log.csv'
 print(f"Save {logfile_name}")
 f=open(logfile_name, 'w', newline='')
 writer=csv.writer(f)

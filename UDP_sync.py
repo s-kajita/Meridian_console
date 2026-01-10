@@ -47,8 +47,11 @@ TotalN = 1500
 #TotalN = 5000
 tau_ctrl = 0     # 受信周期調整項
 tau_d = 0.0025   # 目標受信タイミング [s]
-tau_end = 0.005  # UDP受信ウィンドウの終わり
+tau_end = 0.008  # UDP受信ウィンドウの終わり
 print(f"Receiving UDP for {TotalN/100} s")
+
+Tstart = time.perf_counter()
+Tdisp = 1.0;
 for n in range(TotalN):
     Tcycle = Tnow = time.perf_counter()    #　UDP受信時刻
     Nrcv = 0
@@ -82,6 +85,10 @@ for n in range(TotalN):
     esp32_time = [r_meridim_ushort[idx] for idx in [80,81,82,83]]
     esp32_time_log.append(esp32_time)
 
+    if Tnow-Tstart >= Tdisp:
+        print(f"time = {Tdisp}")
+        Tdisp += 1.0
+        
 '''
     while True:
         Tnow = time.perf_counter()
@@ -90,8 +97,8 @@ for n in range(TotalN):
 '''
 sock.close()
 print("Finished.") 
-
-print(f"{NoUDP} failed UDP receive out of {TotalN} attempts, {(NoUDP/TotalN)*100:.1f} %")
+Failed_percent = (NoUDP/TotalN)*100
+print(f"{NoUDP} failed UDP receive out of {TotalN} attempts, {Failed_percent:.1f} %")
 
 #------------ save log ---------
 logfile_name = 'logs/udp_sync.csv'
@@ -147,26 +154,27 @@ plt.xlabel('[ms]')
 plt.ylabel('frequency')
 plt.title(os.path.basename(__file__))
 '''
-plt.subplot(311)
-plt.plot(t_log[1:],cycle,'.-')
-plt.legend(['Python cycle'])
+plt.subplot(211)
+plt.plot(t_log[1:],cycle,'.-',t_log,1000*df['tau'],'.-',t_log,1000*df['tau_avg'],t_log[[0,-1]],[tau_d*1000,tau_d*1000],'r--')
+plt.legend(['Python cycle','tau','tau_avg','tau_d'])
 plt.ylim(0,12)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
-plt.title(os.path.basename(__file__))
+plt.title(os.path.basename(__file__)+f" / UDP receive failed: {Failed_percent:3.1f} %")
 
-plt.subplot(312)
+plt.subplot(212)
 plt.plot(t_log,df['Nrcv'],'.-')
 plt.ylabel('Nrcv')
 plt.xlabel('time [s]')
 
+'''
 plt.subplot(313)
 plt.plot(t_log,1000*df['tau'],'.-',t_log,1000*df['tau_avg'],t_log[[0,-1]],[tau_d*1000,tau_d*1000],'r--')
 plt.legend(['tau','tau_avg','tau_d'])
 plt.ylim(0,12)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
-
+'''
 
 plt.show()
 
