@@ -19,13 +19,14 @@ hist_range = (0,max(15,max(cycle)))
 
 plt.subplot(211)
 plt.hist(cycle,range=hist_range,bins=100)
+plt.hist(1000*Trecv,range=hist_range, bins=100)
 plt.xlabel('[ms]')
 plt.ylabel('frequency')
 plt.title(os.path.basename(__file__)+f" / UDP receive failed: {Failed_percent:3.1f} %")
 
 plt.subplot(212)
-plt.plot(time[0:-1],cycle,'.-',time,1000.0*df['Trecv'],'r')
-plt.legend(['Tcycle','Trecv'])
+plt.plot(time[0:-1],cycle,'.-',time,1000.0*Trecv,'.',time,1000.0*df['tau_avg'],'r')
+plt.legend(['Tcycle','Trecv','tau_avg'])
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 

@@ -124,7 +124,8 @@ gyro_log = deque([], maxlen=MAX_LOG_SIZE)
 rpy_log  = deque([], maxlen=MAX_LOG_SIZE)
 
 Trecv_log = deque([], maxlen=MAX_LOG_SIZE)   
-Tprof_log = deque([], maxlen=MAX_LOG_SIZE)   
+Tprof_log = deque([], maxlen=MAX_LOG_SIZE)  
+tau_avg_log = deque([], maxlen=MAX_LOG_SIZE) 
 
 KHR3HV_JOINT_INDEX = [21,23,25,27,29,31,33,35,37,39,41,  51,53,55,57,59,61,63,65,67,69,71]
 
@@ -187,6 +188,7 @@ MCMD_EEPROM_PCTOBOARD_DATA2 = 10302  # EEPROMの[2][x]をPCからボードにMer
 TAU_cycle  = 0.01     # 基本ループサイクル [s]
 tau_udp    = 0.002    # 目標受信タイミング [s]
 tau_window = 0.008    # UDP受信ウィンドウのサイズ [s]
+TAU_BUF_SIZE = 51     # 受信タイミング平滑化用メディアンフィルタのバッファサイズ（奇数とすること）
 
 # ================================================================================================================
 # ---- 変数の宣言 -------------------------------------------------------------------------------------------------
@@ -242,6 +244,8 @@ class MeridianConsole:
         self.error_count_servo_skip = 0  # マイコン(Teensy/ESP32)がサーボ値の受信に失敗した回数
         self.error_servo_id = "None"     # 受信エラーのあったサーボのIDを格納
         self.error_servo_id_past = 0     # 前回のサーボエラーIDキープ用
+
+        self.NoUDP = 0                   # UDP読み込みタイムアウトの回数
 
         self.esp32_time = 0              # ESP32の時刻 [ms]
 
@@ -1416,7 +1420,8 @@ def meridian_loop():
 
     reset_counter()      # 各種カウンターの初期化処理   (reset counterボタンを押すのと同じ)
     tau_avg = 0
-    NoUDP = 0
+    tau_buf = deque([],maxlen=TAU_BUF_SIZE)
+    firsttime = True    # 平滑化の初期処理
 
     while (mrd.running):
         print("Start.")
@@ -1446,11 +1451,19 @@ def meridian_loop():
                     tau_rcv = tau  # 受信したサイクル内時刻
 
             if Nrcv > 0:
-                tau_avg += 0.01*(-tau_avg + tau_rcv)  # サイクル内受信時刻の平滑化
+                tau_buf.append(tau_rcv)
+                # サイクル内平均受信タイミング
+                if len(tau_buf) == TAU_BUF_SIZE:
+                    tau_median = np.median(tau_buf)    # メディアンフィルタによる平滑化
+                    if firsttime:
+                        firsttime = False
+                        tau_avg = tau_median
+                    else:
+                        tau_avg += 0.01*(-tau_avg + tau_median)  # ローパスフィルタ
                 Tloop1 = T_cycle + tau_rcv       # Window内で最後に受信した時刻
             else:
                 Tloop1 = T_cycle
-                NoUDP += 1   # 受信ウィンドウ内でUDPが受信できなかった   
+                mrd.NoUDP += 1   # 受信ウィンドウ内でUDPが受信できなかった   
 
 # [ 1-2 ] : 受信UDPデータの変換
             # 受信データをshort型のMeridim90に変換
@@ -1910,12 +1923,12 @@ def meridian_loop():
                             mrd.d_meridim[i] = mrd.r_meridim[i]
 
 # [ 7-2 ] : メッセージウィンドウの表示更新
-                    mrd.message2 = "ERROR COUNT ESP-PC:"+str("{:}".format(NoUDP)) + " PC-ESP:"+str("{:}".format(mrd.error_count_pc_to_esp))+" ESP-TSY:"+str(
+                    mrd.message2 = "ERROR COUNT ESP-PC:"+str("{:}".format(mrd.NoUDP)) + " PC-ESP:"+str("{:}".format(mrd.error_count_pc_to_esp))+" ESP-TSY:"+str(
                         "{:}".format(mrd.error_count_esp_to_tsy)) + " TSY_Delay:"+str("{:}".format(mrd.error_count_tsy_delay)) + "    Servo_trouble:"+mrd.error_servo_id
                     #mrd.message2 = "ERROR COUNT ESP-PC:"+str("{:}".format(mrd.error_count_esp_to_pc)) + " PC-ESP:"+str("{:}".format(mrd.error_count_pc_to_esp))+" ESP-TSY:"+str(
                     #    "{:}".format(mrd.error_count_esp_to_tsy)) + " TSY_Delay:"+str("{:}".format(mrd.error_count_tsy_delay)) + "    Servo_trouble:"+mrd.error_servo_id
 
-                    mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(NoUDP/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
+                    mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(mrd.NoUDP/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
                         mrd.error_count_esp_to_tsy/mrd.loop_count)) + " TsySKIP:"+str("{:.2%}".format(mrd.error_count_tsy_skip/mrd.loop_count)) + " ESPSKIP:" + str("{:.2%}".format(mrd.error_count_esp_skip/mrd.loop_count))
                     #mrd.message3 = "ERROR RATE ESP-PC:"+str("{:.2%}".format(mrd.error_count_esp_to_pc/mrd.loop_count)) + " PC-ESP:"+str("{:.2%}".format(mrd.error_count_pc_to_esp/mrd.loop_count))+" ESP-TSY:"+str("{:.2%}".format(
                     #    mrd.error_count_esp_to_tsy/mrd.loop_count)) + " TsySKIP:"+str("{:.2%}".format(mrd.error_count_tsy_skip/mrd.loop_count)) + " ESPSKIP:" + str("{:.2%}".format(mrd.error_count_esp_skip/mrd.loop_count))
@@ -1938,6 +1951,8 @@ def meridian_loop():
                     Trecv_log.append(Trecv)
                     Tloop9 = time.perf_counter()
                     Tprof_log.append(Tloop9-T_cycle)
+                    tau_avg_log.append(tau_avg)
+
                     q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
                     qd_log.append([mrd.s_meridim_motion_f[j].tolist() for j in KHR3HV_JOINT_INDEX])
 
@@ -2041,11 +2056,13 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    labels = ['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]+['Trecv']+['esp32_time'+str(i) for i in [0,1,2,3]]
+    labels = ['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]
+    labels += ['Trecv']+['esp32_time'+str(i) for i in [0,1,2,3]]+['tau_avg']
     labels += ['acc_x','acc_y','acc_z','gyro_x','gyro_y','gyro_z','roll','pitch','yaw']
     writer.writerow(labels)
     for i in range(len(time_log)):
-        logdata = [time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i] + [Trecv_log[i]] + esp32_time_log[i]
+        logdata = [time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i]
+        logdata += [Trecv_log[i]] + esp32_time_log[i] + [tau_avg_log[i]]
         logdata += acc_log[i]+gyro_log[i]+rpy_log[i]
         writer.writerow(logdata)
 
@@ -2115,6 +2132,7 @@ def reset_counter():  # カウンターのリセット
     mrd.frag_reset_errors = True
     mrd.error_servo_id = "None"
     mrd.start = time.time()
+    mrd.NoUDP = 0
 
 def exit_console(): 
     mrd.running = False
