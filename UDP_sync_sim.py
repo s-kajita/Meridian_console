@@ -8,22 +8,22 @@ import struct
 import csv
 import pandas as pd
 import matplotlib.pyplot as plt
-from collections import deque     # dequeはリングバッファ
-time_log = deque([])
+from collections import deque    
+Tcycle_log = deque([])
 Nrcv_log = deque([]) 
 tau_log  = deque([])
 tau_avg_log = deque([])
 
 #---------------------
-logfile_name = 'udp_log1.csv'
+logfile_name = 'udp_log.csv'
 #-------------------
 df0 = pd.read_csv('logs/'+logfile_name)
 
-t_log0 = np.array(df0['time'])
-t_log0 -= t_log0[0]
-cycle0 = 1000.0*np.diff(t_log0)
+Tudp = np.array(df0['Tudp'])
+Tudp -= Tudp[0]
+cycle0 = 1000.0*np.diff(Tudp)
 
-'''
+
 plt.figure()
 plt.subplot(211)
 plt.hist(cycle0,bins=100)
@@ -32,20 +32,20 @@ plt.ylabel('frequency')
 plt.title(os.path.basename(__file__)+f" [{logfile_name}]")
 
 plt.subplot(212)
-plt.plot(t_log0[1:],cycle0,'.-')
+plt.plot(Tudp[1:],cycle0,'.-')
 plt.legend(['Python cycle'])
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
-plt.show()
-'''
+#plt.show()
+
 #------------------------------
 
 tau_avg = 0
 NoUDP = 0
 TotalN = 1500
 tau_ctrl = 0     # 受信周期調整項
-tau_d = 0.0025   # 目標受信タイミング [s]
+tau_d = 0.002   # 目標受信タイミング [s]
 tau_end = 0.008  # UDP受信ウィンドウの終わり
 print(f"Receiving UDP for {TotalN/100} s")
 
@@ -59,9 +59,9 @@ for n in range(TotalN):
     while Tnow - Tcycle < 0.01+tau_ctrl:
         Tnow = time.perf_counter()-Tstart
         if Tnow - Tcycle < tau_end:
-            if Tnow > t_log0[cnt]:
+            if Tnow > Tudp[cnt]:
                 received = True
-                cnt = min(cnt+1, len(t_log0)-1)
+                cnt = min(cnt+1, len(Tudp)-1)
             else:
                 received = False
 
@@ -76,12 +76,12 @@ for n in range(TotalN):
     if n > 300:
         tau_ctrl = 0.005*(tau_avg - tau_d)    # UDP receive timing control
 
-    time_log.append(Tcycle)
+    Tcycle_log.append(Tcycle)
     Nrcv_log.append(Nrcv)
     tau_log.append(tau)
     tau_avg_log.append(tau_avg)
 
-    if cnt == len(t_log0)-1:
+    if cnt == len(Tudp)-1:
         break
 
     if Tnow >= Tdisp:
@@ -96,19 +96,20 @@ logfile_name = 'logs/udp_sync_sim.csv'
 print(f"Save {logfile_name}")
 f=open(logfile_name, 'w', newline='')
 writer=csv.writer(f)
-labels = ['time','Nrcv','tau','tau_avg']
+labels = ['Tcycle','Nrcv','tau','tau_avg']
 writer.writerow(labels)
-for i in range(len(time_log)):
-    logdata = [time_log[i],Nrcv_log[i],tau_log[i],tau_avg_log[i]]
+for i in range(len(Tcycle_log)):
+    logdata = [Tcycle_log[i],Nrcv_log[i],tau_log[i],tau_avg_log[i]]
     writer.writerow(logdata)
 f.close()
 
 
 df = pd.read_csv(logfile_name)
-t_log = np.array(df['time'])
-t_log -= t_log[0]
+Tcycle = np.array(df['Tcycle'])
+Tcycle -= Tcycle[0]
 
 #------------ plot UDP log ------
+'''
 plt.figure()
 cycle = 1000.0*np.diff(t_log)
 
@@ -124,6 +125,29 @@ plt.subplot(212)
 plt.plot(t_log,df['Nrcv'],'.-')
 plt.ylabel('Nrcv')
 plt.xlabel('time [s]')
+'''
+#--------------------------
+Tcycle = np.array(df['Tcycle'])
+cycle = 1000.0*np.diff(Tcycle)
+tau = np.array(df['tau'])
+hist_range = (0,max(15,max(cycle)))
+
+plt.figure()
+plt.subplot(211)
+plt.hist(cycle,range=hist_range,bins=100)
+plt.hist(1000*tau,range=hist_range, bins=100)
+plt.xlabel('[ms]')
+plt.ylabel('frequency')
+plt.title(os.path.basename(__file__)+f" / UDP receive failed: {Failed_percent:3.1f} %")
+
+plt.subplot(212)
+plt.plot(Tcycle[0:-1],cycle,'.-',Tcycle,1000.0*tau,'.',Tcycle,1000.0*df['tau_avg'],'r')
+plt.legend(['Tcycle','tau','tau_avg'])
+plt.ylabel('[ms]')
+plt.xlabel('time [s]')
+
+
+
 
 plt.show()
 

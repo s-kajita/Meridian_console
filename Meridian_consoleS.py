@@ -111,7 +111,7 @@ import redis  # Redis用ライブラリ
 # ------------ データロガー用変数 ---------
 MAX_LOG_SIZE = 1000
 from collections import deque     # dequeはリングバッファ
-time_log = deque([],maxlen=MAX_LOG_SIZE)
+Tcycle_log = deque([],maxlen=MAX_LOG_SIZE)
 board_frame_log = deque([],maxlen=MAX_LOG_SIZE)
 pc_frame_log = deque([],maxlen=MAX_LOG_SIZE)
 esp32_time_log = deque([], maxlen=MAX_LOG_SIZE)
@@ -123,7 +123,7 @@ acc_log  = deque([], maxlen=MAX_LOG_SIZE)
 gyro_log = deque([], maxlen=MAX_LOG_SIZE)
 rpy_log  = deque([], maxlen=MAX_LOG_SIZE)
 
-Trecv_log = deque([], maxlen=MAX_LOG_SIZE)   
+tau_udp_log = deque([], maxlen=MAX_LOG_SIZE)   
 Tprof_log = deque([], maxlen=MAX_LOG_SIZE)  
 tau_avg_log = deque([], maxlen=MAX_LOG_SIZE) 
 
@@ -186,8 +186,8 @@ MCMD_EEPROM_PCTOBOARD_DATA2 = 10302  # EEPROMの[2][x]をPCからボードにMer
 
 # UDP受信タイミング制御
 TAU_cycle  = 0.01     # 基本ループサイクル [s]
-tau_udp    = 0.002    # 目標受信タイミング [s]
-tau_window = 0.008    # UDP受信ウィンドウのサイズ [s]
+TAU_udp    = 0.002    # 目標受信タイミング [s]
+TAU_window = 0.008    # UDP受信ウィンドウのサイズ [s]
 TAU_BUF_SIZE = 51     # 受信タイミング平滑化用メディアンフィルタのバッファサイズ（奇数とすること）
 
 # ================================================================================================================
@@ -1432,7 +1432,7 @@ def meridian_loop():
         mrd.message1 = "Waiting for UDP data from "+UDP_SEND_IP+"..."
 
         while True:
-            T_cycle = time.perf_counter()    #　サイクル開始時刻
+            Tcycle = time.perf_counter()    #　サイクル開始時刻
             mrd.loop_count += 1  # このpythonを起動してからのフレーム数をカウントアップ
             Nrcv = 0     # 1サイクル中にUDP受信した回数
             tau  = 0     # 1サイクル中の経過時間 [s]
@@ -1440,18 +1440,18 @@ def meridian_loop():
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
 # [ 1-1 ] : UDPデータの受信ウィンドウ
-            while tau < tau_window:
-                tau = time.perf_counter() - T_cycle
+            while tau < TAU_window:
+                tau = time.perf_counter() - Tcycle
                 try:
                     _r_bin_data, addr = sock.recvfrom(MSG_BUFF)  # UDP受信
                 except socket.error as e:
                     pass           # UDPは受信できなかった
                 else:
                     Nrcv += 1      # UDPが受信された場合
-                    tau_rcv = tau  # 受信したサイクル内時刻
+                    tau_udp = tau  # 受信したサイクル内時刻
 
             if Nrcv > 0:
-                tau_buf.append(tau_rcv)
+                tau_buf.append(tau_udp)
                 # サイクル内平均受信タイミング
                 if len(tau_buf) == TAU_BUF_SIZE:
                     tau_median = np.median(tau_buf)    # メディアンフィルタによる平滑化
@@ -1460,9 +1460,8 @@ def meridian_loop():
                         tau_avg = tau_median
                     else:
                         tau_avg += 0.01*(-tau_avg + tau_median)  # ローパスフィルタ
-                Tloop1 = T_cycle + tau_rcv       # Window内で最後に受信した時刻
             else:
-                Tloop1 = T_cycle
+                tau_udp = 0      # 受信できなかった場合は0とする
                 mrd.NoUDP += 1   # 受信ウィンドウ内でUDPが受信できなかった   
 
 # [ 1-2 ] : 受信UDPデータの変換
@@ -1942,15 +1941,14 @@ def meridian_loop():
 
 #  =================== データロガー (MAX_LOG_SIZEを超えると古い順に消去される)===============
                 if mrd.data_logging:
-                    time_log.append(T_cycle)
+                    Tcycle_log.append(Tcycle)
                     board_frame_log.append(mrd.frame_sync_r_recv)
                     pc_frame_log.append(mrd.loop_count)
                     esp32_time_log.append(mrd.esp32_time)
 
-                    Trecv = Tloop1 - T_cycle    #UDPの受信待ち時間
-                    Trecv_log.append(Trecv)
+                    tau_udp_log.append(tau_udp)   #UDPのループ内受信タイミング
                     Tloop9 = time.perf_counter()
-                    Tprof_log.append(Tloop9-T_cycle)
+                    Tprof_log.append(Tloop9-Tcycle)
                     tau_avg_log.append(tau_avg)
 
                     q_log.append([mrd.r_meridim[j]*0.01 for j in KHR3HV_JOINT_INDEX])
@@ -1967,10 +1965,10 @@ def meridian_loop():
             if mrd.loop_count < 300:
                 tau_ctrl = 0.0
             else:
-                tau_ctrl = 0.005*(tau_avg - tau_udp)    # UDP receive timing control
+                tau_ctrl = 0.005*(tau_avg - TAU_udp)    # UDP receive timing control
 
             while tau < TAU_cycle + tau_ctrl:
-                tau = time.perf_counter() - T_cycle
+                tau = time.perf_counter() - Tcycle
 
         socket.close()
                 
@@ -2056,13 +2054,13 @@ def save_log_file():
     print(f"Save {logfile_name}")
     f=open(logfile_name, 'w', newline='')
     writer=csv.writer(f)
-    labels = ['time','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]
-    labels += ['Trecv']+['esp32_time'+str(i) for i in [0,1,2,3]]+['tau_avg']
+    labels = ['Tcycle','board_frame','pc_frame']+['qd'+str(i) for i in range(1,23)]+['q'+str(i) for i in range(1,23)]
+    labels += ['tau_udp']+['esp32_time'+str(i) for i in [0,1,2,3]]+['tau_avg']
     labels += ['acc_x','acc_y','acc_z','gyro_x','gyro_y','gyro_z','roll','pitch','yaw']
     writer.writerow(labels)
-    for i in range(len(time_log)):
-        logdata = [time_log[i]-time_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i]
-        logdata += [Trecv_log[i]] + esp32_time_log[i] + [tau_avg_log[i]]
+    for i in range(len(Tcycle_log)):
+        logdata = [Tcycle_log[i]-Tcycle_log[0], board_frame_log[i], pc_frame_log[i]] + qd_log[i] + q_log[i]
+        logdata += [tau_udp_log[i]] + esp32_time_log[i] + [tau_avg_log[i]]
         logdata += acc_log[i]+gyro_log[i]+rpy_log[i]
         writer.writerow(logdata)
 
