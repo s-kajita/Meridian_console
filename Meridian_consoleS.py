@@ -186,7 +186,7 @@ MCMD_EEPROM_PCTOBOARD_DATA2 = 10302  # EEPROMの[2][x]をPCからボードにMer
 
 # UDP受信タイミング制御
 TAU_cycle  = 0.01     # 基本ループサイクル [s]
-TAU_udp    = 0.002    # 目標受信タイミング [s]
+TAU_udp    = 0.001    # 目標受信タイミング [s]
 TAU_window = 0.008    # UDP受信ウィンドウのサイズ [s]
 TAU_BUF_SIZE = 51     # 受信タイミング平滑化用メディアンフィルタのバッファサイズ（奇数とすること）
 
@@ -1454,12 +1454,13 @@ def meridian_loop():
                 tau_buf.append(tau_udp)
                 # サイクル内平均受信タイミング
                 if len(tau_buf) == TAU_BUF_SIZE:
-                    tau_median = np.median(tau_buf)    # メディアンフィルタによる平滑化
+                    tau_sorted = np.sort(tau_buf)
+                    tau_q1 = tau_sorted[TAU_BUF_SIZE // 4]  # 第1四分位の値 (TAU_BUF_SIZE//2 ならメジアン)
                     if firsttime:
                         firsttime = False
-                        tau_avg = tau_median
+                        tau_avg = tau_q1
                     else:
-                        tau_avg += 0.01*(-tau_avg + tau_median)  # ローパスフィルタ
+                        tau_avg += 0.01*(-tau_avg + tau_q1)  # ローパスフィルタ
             else:
                 tau_udp = 0      # 受信できなかった場合は0とする
                 mrd.NoUDP += 1   # 受信ウィンドウ内でUDPが受信できなかった   

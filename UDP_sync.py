@@ -15,7 +15,7 @@ MSG_SIZE = 90                               # Meridim配列の長さ(デフォ�
 MSG_BUFF = MSG_SIZE * 2                     # Meridim配列のバイト長さ
 # ------------ データロガー用変数 ---------
 
-MAX_LOG_SIZE = 2000
+MAX_LOG_SIZE = 5000
 from collections import deque     # dequeはリングバッファ
 Tcycle_log = deque([],maxlen=MAX_LOG_SIZE)
 Nrcv_log = deque([],maxlen=MAX_LOG_SIZE) 
@@ -23,8 +23,14 @@ tau_log  = deque([],maxlen=MAX_LOG_SIZE)
 tau_avg_log = deque([],maxlen=MAX_LOG_SIZE)
 esp32_time_log = deque([],maxlen=MAX_LOG_SIZE)
 
+#------ My room router -------
 UDP_SEND_IP_DEF= '192.168.11.12'
 UDP_RECV_IP_DEF= '192.168.11.3'
+
+#------- ASUS WiFi router ----------
+#UDP_SEND_IP_DEF= '192.168.50.145'
+#UDP_RECV_IP_DEF= '192.168.50.142'
+
 NETWORK_MODE = 0
 
 UDP_SEND_IP = UDP_SEND_IP_DEF
@@ -38,25 +44,22 @@ _r_bin_data = np.zeros(180, dtype=np.int8)
 sock.settimeout(0)  # 非ブロッキングモード
 
 TAU_BUF_SIZE = 51
-TAU_Q1 = 10    #第1四分位のデータ位置
 tau_buf = deque([],maxlen=TAU_BUF_SIZE)   #メディアンフィルタ用バッファ
 
 tau_avg = 0
 NoUDP = 0
-TotalN = 2000
-#TotalN = 5000
 tau_ctrl = 0     # 制御サイクル調整項
 TAU_udp   = 0.001   # 目標受信タイミング [s]
 TAU_WINDOW = 0.008  # UDP受信ウィンドウの長さ [s]
 
-print(f"Receiving UDP for {TotalN/100} s")
+print(f"Receiving UDP for {MAX_LOG_SIZE/100} s")
 
 #------------------ 制御サイクル ------------------
 firsttime = True
 
 Tstart = time.perf_counter()
 Tdisp = 1.0;
-for n in range(TotalN):
+for n in range(MAX_LOG_SIZE):
     Tcycle = time.perf_counter()    #　制御サイクル開始時刻
     Nrcv = 0
     
@@ -82,7 +85,7 @@ for n in range(TotalN):
         # サイクル内平均受信タイミング
         if len(tau_buf) == TAU_BUF_SIZE:
             tau_sorted = np.sort(tau_buf)    # メディアンフィルタによる平滑化
-            tau_q1 = tau_sorted[TAU_Q1]  # おおよそ第1四分位のデータ
+            tau_q1 = tau_sorted[TAU_BUF_SIZE//4]  # 第1四分位のデータ (TAU_BUF_SIZE//2 ならメジアン)
             if firsttime:
                 firsttime = False
                 tau_avg = tau_q1
@@ -115,8 +118,8 @@ for n in range(TotalN):
        
 sock.close()
 print("Finished.") 
-Failed_percent = (NoUDP/TotalN)*100
-print(f"{NoUDP} failed UDP receive out of {TotalN} attempts, {Failed_percent:.1f} %")
+Failed_percent = (NoUDP/MAX_LOG_SIZE)*100
+print(f"{NoUDP} failed UDP receive out of {MAX_LOG_SIZE} attempts, {Failed_percent:.1f} %")
 
 #------------ save log ---------
 logfile_name = 'logs/udp_sync.csv'
