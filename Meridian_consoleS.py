@@ -300,6 +300,23 @@ class MeridianConsole:
         self.flag_csv = 0
         self.flag_set_csv = 0  #何かしらのフラグ処理に使用
 
+        # ----------- sim2real用フラグ --------------
+        self.flag_set_policy = False            #policyのロード用flag
+        self.flag_deployer_on = False           #RealRobotDeployerのインスタンス生成用flag
+        self.flag_go_action = False             #ロードしたpolicyの再生または停止flag
+        self.flag_obs_csv = False               #obs_bufのcsvファイル化用flag
+        
+        self.cmd_lin_x = 0.0
+        self.cmd_lin_y = 0.0
+        self.cmd_ang_vel = 0.0
+        self.max_lin_x = 0.3
+        self.min_lin_x = -0.3
+        self.max_lin_y = 0.3
+        self.min_lin_y = -0.3
+        self.max_ang_vel = 0.5
+        self.min_ang_vel = -0.5
+
+        # ----------- 関節軌道補完 ------------------
         self.Ttrans = 1.0
         self.time_start = 0
         self.pos_start = np.array([0] * 22)
@@ -1250,7 +1267,7 @@ def create_trim_window():
                     width=viewport_width-20, height=viewport_height-20,
                     pos=[10, 10], on_close=close_trim_window):
     '''
-    mrd.trim_setting_window = dpg.window(label="Trim Setting", tag="Trim Setting", width=587, height=560, pos=[260, 5], collapsed=True)
+    mrd.trim_setting_window = dpg.window(label="Trim Setting", tag="Trim Setting", width=600, height=560, pos=[260, 5], collapsed=True)
     with mrd.trim_setting_window:
         # --- 上部コントロールエリア -------------------------------------------------
         power_state = dpg.get_value("Power")
@@ -2355,11 +2372,60 @@ def play_csv():
     
     mrd.flag_play_csv = True
 
-def stop_csv():
-    
+def stop_csv():   
     #強制的にcsvファイルの再生を停止する
     mrd.flag_play_csv = False
-    
+
+#-------------------------------------------------------------------------
+# sim2real ウィンドウ用コールバック関数
+#-------------------------------------------------------------------------
+def set_policy():
+    print("load policy")
+    mrd.flag_set_policy = True
+
+def go_action():
+    print("Go action")
+    mrd.flag_go_action = True
+
+def emergency_stop():
+    print("緊急停止")
+    mrd.flag_go_action = False
+
+def obs2csv():
+    mrd.flag_obs_csv = True
+
+def go_straight():
+    mrd.cmd_lin_x = mrd.cmd_lin_x + 0.1
+    mrd.cmd_lin_x = np.clip(mrd.cmd_lin_x, mrd.min_lin_x, mrd.max_lin_x)
+    mrd.cmd_lin_x = round(mrd.cmd_lin_x,2)
+
+def go_back():
+    mrd.cmd_lin_x = mrd.cmd_lin_x - 0.1
+    mrd.cmd_lin_x = np.clip(mrd.cmd_lin_x, mrd.min_lin_x, mrd.max_lin_x)
+    mrd.cmd_lin_x = round(mrd.cmd_lin_x,2)
+
+def go_left():
+    mrd.cmd_lin_y = mrd.cmd_lin_y + 0.1
+    mrd.cmd_lin_y = np.clip(mrd.cmd_lin_y, mrd.min_lin_y, mrd.max_lin_y)
+    mrd.cmd_lin_y = round(mrd.cmd_lin_y,2)
+
+def go_right():
+    mrd.cmd_lin_y = mrd.cmd_lin_y - 0.1
+    mrd.cmd_lin_y = np.clip(mrd.cmd_lin_y, mrd.min_lin_y, mrd.max_lin_y)
+    mrd.cmd_lin_y = round(mrd.cmd_lin_y,2)
+
+def turn_left():
+    mrd.cmd_ang_vel = mrd.cmd_ang_vel + 0.1
+    mrd.cmd_ang_vel = np.clip(mrd.cmd_ang_vel, mrd.min_ang_vel, mrd.max_ang_vel)
+    mrd.cmd_ang_vel = round(mrd.cmd_ang_vel, 2)
+
+def turn_right():
+    mrd.cmd_ang_vel = mrd.cmd_ang_vel - 0.1
+    mrd.cmd_ang_vel = np.clip(mrd.cmd_ang_vel, mrd.min_ang_vel, mrd.max_ang_vel)
+    mrd.cmd_ang_vel = round(mrd.cmd_ang_vel, 2)
+
+
+# --------------------------------------------------------------    
 #  3次スプライン補間用行列
 def calcScoeff(t1,t2):
     global Scoeff
@@ -2459,7 +2525,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Message ] : メッセージ表示用ウィンドウ(表示位置:下段/左側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Messege", width=590, height=155, pos=[5, 400]):
+        with dpg.window(label="Messege", width=590, height=175, pos=[5, 400]):
 
             dpg.add_text("disp_send ", pos=[383, 53])
             dpg.add_checkbox(tag="disp_send", callback=set_disp_send, pos=[452, 53])
@@ -2474,26 +2540,6 @@ def main():
             dpg.add_text(mrd.message3, tag="DispMessage3")
             dpg.add_text(mrd.message4, tag="DispMessage4")
 
-#---------------------------------------------------------------------------
-# [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:中段/中央下)
-# ----------------------------------------------------------------------------          
-        #csv_file表示画面
-        with dpg.window(label="Matlab Motion", width=248, height=175, pos=[600,400]):
-            with dpg.group(label='Centercenterright'):
-            
-                #playボタンを生成
-                dpg.add_button(label="play_csv", callback = play_csv, width=80, pos=[5, 25])
-                dpg.add_button(label="Stop", callback = stop_csv, width=80, pos = [100,25])
-                
-                y = 50
-                dpg.add_text("Select csv file",pos=[5,y])              
-                dpg.add_spacer(height=10)
-                
-                csv_files = [f for f in os.listdir(mrd.pattern_path) if f.endswith('.csv')]   #csvファイルのリスト
-                for file in csv_files:
-                    with dpg.group():                       
-                        y += 20
-                        dpg.add_checkbox(label=f" {file}", callback = set_csv_file, user_data= file, pos = [5,y])
 
 # ------------------------------------------------------------------------
 # [ Sensor Monitor ] : センサー値モニタリング用ウィンドウ(表示位置:上段/中央)
@@ -2573,7 +2619,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Button Input ] : リモコン入力コンパネ用ウィンドウ(表示位置:上段/右側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Button Input", width=248, height=155, pos=[600, 25]):
+        with dpg.window(label="Button Input", width=260, height=155, pos=[600, 25], collapsed=True):
             dpg.add_checkbox(tag="Btn_L2",      callback=pad_btn_panel_on, user_data=256, pos=[15, 38])
             dpg.add_checkbox(tag="Btn_L1",      callback=pad_btn_panel_on, user_data=1024, pos=[15, 60])
             dpg.add_checkbox(tag="Btn_L_UP",    callback=pad_btn_panel_on, user_data=16, pos=[42, 80])
@@ -2592,7 +2638,7 @@ def main():
 # ------------------------------------------------------------------------
 # [ Mini Terminal ] : コマンド送信用ミニターミナル(表示位置:中段/右側)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Mini Terminal", width=248, height=203, pos=[600, 185]):
+        with dpg.window(label="Mini Terminal", width=260, height=203, pos=[600, 45], collapsed=True):
             # with dpg.group(label='LeftSide'):
             dpg.add_text("Index", pos=[15, 25])
             dpg.add_text("Data", pos=[60, 25])
@@ -2621,6 +2667,59 @@ def main():
             dpg.add_radio_button(["Flow", "Step"], tag="transaction_mode", pos=[10, 148],
                                  callback=set_transaction_mode, default_value="Flow", horizontal=True)
             dpg.add_button(label=" Next frame ", pos=[15, 175], callback=send_data_step_frame)  # 右下に設置
+
+# ------------------------------------------------------------------------
+# [ sim2real ] : sim2realウィンドウ (表示位置:右側/下段)
+# ------------------------------------------------------------------------
+        with dpg.window(label="sim2real", width=260, height=330, pos=[600,65]):
+            with dpg.group(label = 'Genesis'):
+
+                #学習済みpolicyのロード
+                dpg.add_button(label = "load policy", callback = set_policy, width=80, pos = [5,25])
+                #読み込んだ学習済みpolicyで推論開始
+                dpg.add_button(label="Go action", callback = go_action, width=80, pos = [90,25])
+                #やばい動きをした際の緊急停止用ボタン
+                dpg.add_button(label = "Emer. stop", callback = emergency_stop, width=80, pos = [175,25])
+                #観測データをcsvファイル化するためのボタン
+                dpg.add_button(label = "obs2csv", callback = obs2csv, width=110, pos = [5,60])
+
+                Ypos = 130
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Up,   callback=go_straight, width=100, height=100, pos=[ 60,Ypos])
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Down, callback=go_back,     width=100, height=100, pos=[ 60,Ypos+80])
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Left, callback=go_left,     width=100, height=100, pos=[ 20,Ypos+40])
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Right,callback=go_right,    width=100, height=100, pos=[100,Ypos+40])
+
+                dpg.add_text("lin x vel", pos = [10,Ypos+120])
+                dpg.add_text(mrd.cmd_lin_x, tag="lin_x_velocity", pos = [80,Ypos+120])
+                dpg.add_text("lin y vel", pos = [10,Ypos+150])
+                dpg.add_text(mrd.cmd_lin_y, tag="lin_y_velocity", pos = [80,Ypos+150])
+
+                dpg.add_text("Yaw", pos=[190,Ypos+40])
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Down, callback = turn_right,  width=100, height=100, pos = [160,Ypos+40])
+                dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Up, callback = turn_left, width=100, height=100, pos = [220,Ypos+40])
+                dpg.add_text("ang vel", pos = [160, Ypos+120])
+                dpg.add_text(mrd.cmd_ang_vel, tag = "ang_vel", pos = [220,Ypos+120])
+
+#---------------------------------------------------------------------------
+# [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:中段/中央下)
+# ----------------------------------------------------------------------------          
+        #csv_file表示画面
+        with dpg.window(label="Matlab Motion", width=260, height=175, pos=[600,400]):
+            with dpg.group(label='Centercenterright'):
+            
+                #playボタンを生成
+                dpg.add_button(label="play_csv", callback = play_csv, width=80, pos=[5, 25])
+                dpg.add_button(label="Stop", callback = stop_csv, width=80, pos = [100,25])
+                
+                y = 50
+                dpg.add_text("Select csv file",pos=[5,y])              
+                dpg.add_spacer(height=10)
+                
+                csv_files = [f for f in os.listdir(mrd.pattern_path) if f.endswith('.csv')]   #csvファイルのリスト
+                for file in csv_files:
+                    with dpg.group():                       
+                        y += 20
+                        dpg.add_checkbox(label=f" {file}", callback = set_csv_file, user_data= file, pos = [5,y])
 
 # dpg描画処理2 =========================================================
         with dpg.value_registry():  # dpg変数値の登録
@@ -2673,6 +2772,10 @@ def main():
             dpg.set_value("pad_L2v", int(_padL2val))
             dpg.set_value("pad_R2v", int(_padR2val))
             dpg.set_value("button_data", int(mrd.r_meridim[15]))
+            
+            dpg.set_value("lin_x_velocity", mrd.cmd_lin_x)
+            dpg.set_value("lin_y_velocity", mrd.cmd_lin_y)
+            dpg.set_value("ang_vel", mrd.cmd_ang_vel)
 
 # ROS1 joint_statesのパブリッシュ =======================================
             global rospy_imported
