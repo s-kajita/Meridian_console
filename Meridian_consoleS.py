@@ -108,6 +108,22 @@ import csv
 import re
 import redis  # Redis用ライブラリ
 
+#------------- sim2realに必要なライブラリ -----------
+import argparse
+
+#Genesis用
+import sys
+import pickle
+import torch
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
+import genesis as gs
+from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
+#学習済みポリシーのロード用モジュール
+from rsl_rl.runners import OnPolicyRunner
+
+
 # ------------ データロガー用変数 ---------
 MAX_LOG_SIZE = 1000
 from collections import deque     # dequeはリングバッファ
@@ -383,7 +399,164 @@ class MeridianConsole:
         # ロックの追加
         self.lock = threading.Lock()
 
+#-------------------------------------------------------
+#  sim2real 用クラス　by 片岡君
+#-------------------------------------------------------
+class RealRobotDeployer:
+    """
+    実機の低レベルセンサデータ(low_state)からobsを構築し、
+    学習済みポリシーの推論結果からtarget_dof_posを算出、実機へコマンドを送信するクラス
+    """
 
+    def __init__(self, policy, env_cfg, obs_cfg, env):
+
+        '''
+        #全身の場合
+        self.num_actions = 22
+        self.def_pos = [0,0, 0,0,0,0, 0,0,0,0, 0,0,-0.2,0.4,-0.2,0, 0,0,-0.2,0.4,-0.2,0] #ロボットの初期姿勢
+
+        #meridian用に関節順を入れ替えるための処理に使う変数
+        self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 1, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21],dtype=torch.long, device='cuda:0')#genesis内のインデックスでmeridian配列順に並び替える
+        #self.genesis2khr_dir = torch.tensor([1, 1,  -1,1,1,1,  -1,1,1,-1,  -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．
+        #現状の式だとこちらを使用
+        self.genesis2khr_dir = torch.tensor([1,  -1,1,1,1,  -1,1,-1,1,1,-1,  1,  -1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．
+        #matlab2khr_dir = [1, 1,  -1,1,1,1,  -1,1,1,-1,  -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+        self.matlab2khr_dir = torch.tensor([1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, 1,1,1,-1,-1,-1], device='cuda', dtype=torch.float32)
+
+        #腰、頭、左上半身、右上半身、左下半身、右下半身
+        self.servo_indices = [51,21,23, 25, 27, 29, 53, 55, 57, 59, 31, 33, 35, 37, 39, 41, 61, 63, 65, 67, 69, 71 ]
+        '''
+
+        '''
+        #胸、頭、足のみの場合
+        self.num_actions = 14
+        self.def_pos = [0, 0, 0,0,-0.2,0.4,-0.2,0,  0,0,-0.2,0.4,-0.2,0] #ロボットの初期姿勢
+        self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10, 11, 12, 13], dtype=torch.long, device='cuda:0')
+        #self.genesis2khr_dir = torch.tensor([1, 1, -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．胸、頭、左足、右足
+        #現状の式だとこちらを使用
+        self.genesis2khr_dir = torch.tensor([1,  -1,1,-1,1,1,-1,  1,   1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．胸、左足、頭、右足
+        
+        #胸、頭、左下半身、右下半身
+        self.servo_indices = [51, 21, 31, 33, 35, 37, 39, 41, 61, 63, 65, 67, 69, 71]
+        '''
+
+        #足のみの場合
+        #matlab2khr_dir = [1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+        self.num_actions = 12
+        #self.def_pos = np.array([0, 0, -0.2, 0.4, -0.2, 0, 0, 0, -0.2, 0.4, -0.2, 0], dtype=float) #ロボットの初期姿勢
+        self.def_pos = np.array([0, 0, -0.33, 0.66, -0.33, 0, 0, 0, -0.33, 0.66, -0.33, 0], dtype=float) #ロボットの初期姿勢2
+        self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10, 11, 12, 13], dtype=torch.long, device='cuda:0')
+        #self.genesis2khr_dir = torch.tensor([1, 1, -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．胸、頭、左足、右足
+
+
+        #現状の式だとこちらを使用
+        #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
+        #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
+        #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
+        self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
+        self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        
+        #左下半身、右下半身
+        self.servo_indices = [31, 33, 35, 37, 39, 41,  61, 63, 65, 67, 69, 71]
+        
+        #共通部分
+        self.policy = policy
+
+        self.env = env
+        self.env_cfg = env_cfg
+        self.obs_cfg = obs_cfg
+        self.device = "cuda"
+        self.simulate_action_latency = False
+        self.num_envs = 1
+        self.clip_actions = 2
+        self.action_scale = 0.25
+
+        self.dt = 0.02
+        self.loop_dt = 0.01
+        
+        self.num_commands = 3
+        self.actions = torch.zeros((1, self.num_actions), device="cuda", dtype = torch.float32)
+        #self.motors_dof_idx = [self.robot.get_joint(name).dof_start for name in self.env_cfg["joint_names"]]
+
+        self.obs_list = []
+        self.dof_pos = torch.zeros_like(self.actions)
+        self.dof_vel = torch.zeros_like(self.actions)
+        self.target_dof_pos = torch.zeros_like(self.actions)
+        self.last_actions = torch.zeros_like(self.actions)
+        self.last_dof_vel = torch.zeros_like(self.actions)
+
+        self.pos = []  #関節角度情報
+
+        #スケール
+        self.lin_vel_scale = 2.0
+        self.ang_vel_scale = 0.25
+        self.dof_vel_scale = 0.05
+        self.dof_pos_scale = 1.0
+        
+        #コマンド情報[vx,vy,yaw_rate]
+        #self.commands = torch.tensor([0.2,0.0,0.0], device='cuda', dtype=torch.float32).unsqueeze(0) #歩行の際のコマンド
+        self.commands = torch.tensor([mrd.cmd_lin_x,mrd.cmd_lin_y,mrd.cmd_ang_vel], device='cuda', dtype=torch.float32).unsqueeze(0) #commandの初期化
+
+        self.commands_scale = torch.tensor([2.0, 2.0, 0.25], device='cuda', dtype=torch.float32).unsqueeze(0) #実際にはkhr_env.pyのcommands_scaleに準じた値を設定
+
+        self.base_ang_vel = torch.zeros((self.num_envs, 3), device='cuda', dtype=torch.float32) #IMU情報:実機からはgyroセンサから取得
+        self.projected_gravity = torch.zeros((self.num_envs, 3), device='cuda', dtype=torch.float32) # 重力情報
+        self.global_gravity = torch.tensor([0.0, 0.0, -1.0], device='cuda', dtype=torch.float32).repeat(self.num_envs, 1) # 世界座標系での重力は (x, y, z)=[0, 0, -1]
+        self.base_ang_vel = torch.zeros((self.num_envs, 3), device='cuda', dtype=torch.float32)
+        self.q_xyzw       = torch.zeros((4,), device='cuda', dtype=torch.float32)
+
+
+        self.default_dof_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0) #関節角度のデフォルト値
+        self.start_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
+        self.goal_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
+        self.dof_prev_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
+
+
+    
+        self.lock =  threading.Lock() 
+
+        self.dof_pos_plot_list = []
+        self.plot_count = [0] * self.num_actions
+
+        self.period = 0.8
+        #self.period = 1.2
+        self.episode_length_buf = 0
+        self.phase = torch.tensor((self.episode_length_buf * self.dt) % self.period / self.period, dtype=torch.float32, device="cuda").unsqueeze(0)
+        #self.phase = (self.episode_length_buf * self.dt) % self.period / self.period
+
+        self.sin_phase = torch.sin(2 * np.pi * self.phase ).unsqueeze(0)
+        self.cos_phase = torch.cos(2 * np.pi * self.phase ).unsqueeze(0)
+
+        self.loop_time_list = []
+
+
+    def construct_obs(self):
+
+        
+        self.env.obs_buf = torch.cat(
+            [
+                self.base_ang_vel * self.ang_vel_scale,  # 3
+                self.projected_gravity, #3
+                self.commands * self.commands_scale,  # 3
+                (self.dof_pos - self.default_dof_pos) * self.dof_pos_scale,  # 12
+                self.dof_vel * self.dof_vel_scale,  # 12
+                self.actions, #12
+                self.cos_phase, #1
+                self.sin_phase, #1
+                self.last_actions, # 12
+                self.last_dof_vel * self.dof_vel_scale, #12
+            ],
+            axis = -1,
+        )
+        self.obs_list.append(self.env.obs_buf.cpu().numpy())
+        self.last_actions[:] = self.actions
+        self.last_dof_vel[:] = self.dof_vel
+
+
+#------------------------------------------------------------
+#  UDP通信関連
+#------------------------------------------------------------
 def get_local_ip():  # 自身のIPアドレスを自動取得する
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # ダミーのsocketを作成
@@ -507,8 +680,9 @@ def select_network_mode_and_ip(filename="board_ip.txt"):
             print("Please answer with y or n.")
     return ip_table[network_mode]['SEND'], ip_table[network_mode]['RECV'], network_mode
 
-
+#-----------------------------------------------------------------
 # Trim Setting ウィンドウを開く
+#-----------------------------------------------------------------
 def open_trim_window():
     if not mrd.flag_trim_window_open:
         print("Open Trim Setting window.")
@@ -1375,6 +1549,58 @@ def create_trim_window():
 UDP_SEND_IP_DEF, UDP_RECV_IP_DEF, NETWORK_MODE = select_network_mode_and_ip()
 UDP_SEND_IP = UDP_SEND_IP_DEF
 
+#-------------------------------------------------------
+#  sim2real 学習済みポリシーのロード
+#-------------------------------------------------------
+def load_policy():
+
+    global env_cfg,obs_cfg,env,policy
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", "--exp_name", type=str, default="action_rate005kp30")
+    parser.add_argument("--ckpt", type=int, default=999)
+    parser.add_argument('--eval', type=int, default=1)
+    args = parser.parse_args()
+
+    #exp_name = "khr-walking"
+    #args.exp_name = "walk_in_a_place_50Hz"
+    #args.exp_name = "acceleration2"
+    #args.exp_name = "reduce_layers"
+    #args.exp_name = "asibumi_and_walk34"
+    args.exp_name = "asibumi_and_walk54"
+    #args.exp_name = "otamesi"
+
+    #args.exp_name = 'simply_asibumi_clip1'
+
+    args.ckpt = 19999
+     #デフォルト
+    env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(open(f"../{args.exp_name}/cfgs.pkl", "rb"))
+    log_dir = f"../{args.exp_name}"
+    resume_path = os.path.join(log_dir, f"model_{args.ckpt}.pt")
+
+
+    #学習済みポリシーのロード
+    #KHREnvを用いてOnPolicyRunner経由でロード
+    #khr_eval.pyをimportする．
+    from khr_env_no_gs import KHREnv
+    env = KHREnv(
+        num_envs=1,
+        env_cfg=env_cfg,
+        obs_cfg=obs_cfg,
+        reward_cfg=reward_cfg,
+        command_cfg=command_cfg,
+        show_viewer=False,
+
+    )
+
+    runner = OnPolicyRunner(env, train_cfg, log_dir, device='cuda')
+    runner.load(resume_path)
+    policy = runner.get_inference_policy(device='cuda')
+    #deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
+
+    #mrd.flag_set_policy = False
+
+
 # ================================================================================================================
 # ---- メインループ ------------------------------------------------------------------------------------------------
 # ================================================================================================================
@@ -1748,29 +1974,135 @@ def meridian_loop():
                             mrd.flag_play_csv = False
 
 
-                    # if mrd.flag_python_action:  # コード書式は自由だが, 仮にすべての関節角度に0を代入する場合の例
-                    #     mrd.s_meridim_motion_f[21] = 0  # 頭ヨー
-                    #     mrd.s_meridim_motion_f[23] = 0  # 左肩ピッチ
-                    #     mrd.s_meridim_motion_f[25] = 0  # 左肩ロール
-                    #     mrd.s_meridim_motion_f[27] = 0  # 左肘ヨー
-                    #     mrd.s_meridim_motion_f[29] = 0  # 左肘ピッチ
-                    #     mrd.s_meridim_motion_f[31] = 0  # 左股ヨー
-                    #     mrd.s_meridim_motion_f[33] = 0  # 左股ロール
-                    #     mrd.s_meridim_motion_f[35] = 0  # 左股ピッチ
-                    #     mrd.s_meridim_motion_f[37] = 0  # 左膝ピッチ
-                    #     mrd.s_meridim_motion_f[39] = 0  # 左足首ピッチ
-                    #     mrd.s_meridim_motion_f[41] = 0  # 左足首ロール
-                    #     mrd.s_meridim_motion_f[51] = 0  # 腰ヨー
-                    #     mrd.s_meridim_motion_f[53] = 0  # 右肩ピッチ
-                    #     mrd.s_meridim_motion_f[55] = 0  # 右肩ロール
-                    #     mrd.s_meridim_motion_f[57] = 0  # 右肘ヨー
-                    #     mrd.s_meridim_motion_f[59] = 0  # 右肘ピッチ
-                    #     mrd.s_meridim_motion_f[61] = 0  # 右股ヨー
-                    #     mrd.s_meridim_motion_f[63] = 0  # 右股ロール
-                    #     mrd.s_meridim_motion_f[65] = 0  # 右股ピッチ
-                    #     mrd.s_meridim_motion_f[67] = 0  # 右膝ピッチ
-                    #     mrd.s_meridim_motion_f[69] = 0  # 右足首ピッチ
-                    #     mrd.s_meridim_motion_f[71] = 0  # 右足首ロール
+                    #---------------------------- sim2real処理 ----------------------------------
+                    #policy load処理
+                    #Sim2Real ポリシーをロード
+                    if mrd.flag_set_policy:
+                        load_policy()
+                        deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
+                        loop_counter = 0
+                        
+                        
+                        #初期姿勢に移動
+                        first_pos = deployer.def_pos * 180 / math.pi
+
+                        for i in range(6):
+                                mrd.s_meridim_motion_f[31 + i*2] = float(first_pos[i]) #左下半身
+                                mrd.s_meridim_motion_f[61 + i*2] = float(first_pos[6 + i]) #右下半身
+                        for i in range(6):
+                                mrd.s_meridim_motion_keep_f[31 + i*2] = mrd.s_meridim_motion_f[31 + i*2]
+                                mrd.s_meridim_motion_keep_f[61 + i*2] = mrd.s_meridim_motion_f[61 + i*2]
+                        
+
+                        mrd.flag_set_policy = False
+
+                    #-----------------------------------------------------------------------------------
+                    #policy推定用
+                    if mrd.flag_go_action:
+
+                        #obs_buf用　ジャイロセンサのリスト作成
+                        #mrd.gyro = [mrd.r_meridim[5]/100, mrd.r_meridim[6]/100, mrd.r_meridim[7]/100]
+                        mrd.gyro = np.array([mrd.r_meridim[i] / 100 for i in (5, 6, 7)], dtype=np.float32) * math.pi / 180.0
+
+                        #obs →　projected gravity用クォータニオンの計算
+                        #radianに変換する必要がある．
+                        roll = mrd.r_meridim[12]/100 * math.pi / 180
+                        pitch = mrd.r_meridim[13]/100 * (math.pi / 180)
+                        yaw = mrd.r_meridim[14]/100 * math.pi / 180
+
+                        cy = math.cos(yaw * 0.5)
+                        sy = math.sin(yaw * 0.5)
+                        cp = math.cos(pitch * 0.5)
+                        sp = math.sin(pitch * 0.5)
+                        cr = math.cos(roll * 0.5)
+                        sr = math.sin(roll * 0.5)
+
+                        mrd.w = cr * cp * cy + sr * sp * sy
+                        mrd.x = sr * cp * cy - cr * sp * sy
+                        mrd.y = cr * sp * cy + sr * cp * sy
+                        mrd.z = cr * cp * sy - sr * sp * cy
+                        mrd.Quaternion = [mrd.w, mrd.x, mrd.y, mrd.z]  
+
+
+                        meridim_deg = [mrd.r_meridim[i] * 0.01 for i in deployer.servo_indices]
+
+                        meridim_rad = torch.tensor(meridim_deg, device='cuda', dtype=torch.float32) * math.pi / 180.0 #radianに変換
+                        #print(meridim_deg)
+                        
+
+                        deployer.dof_pos.copy_(meridim_rad)
+                        if loop_counter == 0:
+                            deployer.dof_prev_pos.copy_(deployer.dof_pos)
+
+                        # 速度計算（in-place）
+                        deployer.dof_vel.copy_((deployer.dof_pos - deployer.dof_prev_pos) / deployer.dt)
+                        deployer.base_ang_vel.copy_(torch.tensor(mrd.gyro, dtype=torch.float32, device="cuda")).unsqueeze(0)
+                        deployer.q_xyzw.copy_(torch.tensor(mrd.Quaternion, dtype=torch.float32, device="cuda")).unsqueeze(0)
+                        deployer.projected_gravity = transform_by_quat(deployer.global_gravity, inv_quat(deployer.q_xyzw))
+                        deployer.commands = torch.tensor([mrd.cmd_lin_x,mrd.cmd_lin_y,mrd.cmd_ang_vel], device='cuda', dtype=torch.float32).unsqueeze(0)
+                        deployer.construct_obs()
+
+                        if loop_counter % 2 == 0:
+                            with torch.no_grad():
+                                
+                                deployer.episode_length_buf += 1
+                                deployer.phase = (deployer.episode_length_buf * deployer.dt) % deployer.period / deployer.period
+                                deployer.phase = torch.tensor(deployer.phase, dtype=torch.float32, device='cuda').unsqueeze(0)
+
+                                deployer.sin_phase = torch.sin(2 * np.pi * deployer.phase ).unsqueeze(0)
+                                deployer.cos_phase = torch.cos(2 * np.pi * deployer.phase ).unsqueeze(0)
+                                
+                            
+                                obs = deployer.env.obs_buf
+                                deployer.actions = deployer.policy(obs)
+                                deployer.actions = torch.clip(deployer.actions, -deployer.clip_actions, deployer.clip_actions)
+                                #print(deployer.actions)
+                                
+
+                            exec_actions = (deployer.last_actions if deployer.simulate_action_latency else deployer.actions)
+
+                            deployer.goal_pos = exec_actions * (deployer.action_scale) + deployer.default_dof_pos
+                            #実機用の回転方向に変換する
+                            deployer.goal_pos = deployer.goal_pos * deployer.genesis2khr_dir
+                            
+                            deployer.target_dof_pos = deployer.goal_pos * 180 / (math.pi)
+
+
+                        #全身での推論の処理
+                        '''
+                        for i in range(11):
+                            mrd.s_meridim_motion_f[21+i*2] = float(deployer.target_dof_pos[0][i])
+                            mrd.s_meridim_motion_f[51+i*2] = float(deployer.target_dof_pos[0][11+i])
+
+                        for i in range(11):
+                                mrd.s_meridim_motion_keep_f[21+i * 2] = mrd.s_meridim_motion_f[21+i*2]
+                                mrd.s_meridim_motion_keep_f[51+i * 2] = mrd.s_meridim_motion_f[51+i*2]
+                        '''
+
+                        #足のみでの推論の場合                    
+                        for i in range(6):
+                                mrd.s_meridim_motion_f[31 + i*2] = float(deployer.target_dof_pos[0][i]) #左下半身
+                                mrd.s_meridim_motion_f[61 + i*2] = float(deployer.target_dof_pos[0][6 + i]) #右下半身
+                        for i in range(6):
+                                mrd.s_meridim_motion_keep_f[31 + i*2] = mrd.s_meridim_motion_f[31 + i*2]
+                                mrd.s_meridim_motion_keep_f[61 + i*2] = mrd.s_meridim_motion_f[61 + i*2]
+
+
+                        deployer.dof_prev_pos.copy_(deployer.dof_pos)
+                        loop_counter += 1
+
+                        #roll軸のオイラー角とgyroのリストを作成する
+                        euler_roll = np.array(mrd.r_meridim[12] / 100 * (math.pi / 180))
+                        mrd.roll_list.append([euler_roll, mrd.gyro[0]])
+
+                        deployer.loop_time_list.append([loop_time, loop_time1, loop_time2, loop_time3, loop_time4, loop_time5])
+                        '''
+                        if loop_counter == 10:
+
+                            mrd.flag_go_action = False
+                        '''
+                        
+
 
 # [ 5-2 ] : サーボ位置リセットボタン(Home)が押下されていたら全サーボ位置をゼロリセット
                     if mrd.flag_servo_home > 0:
@@ -2669,7 +3001,7 @@ def main():
             dpg.add_button(label=" Next frame ", pos=[15, 175], callback=send_data_step_frame)  # 右下に設置
 
 # ------------------------------------------------------------------------
-# [ sim2real ] : sim2realウィンドウ (表示位置:右側/下段)
+# [ sim2real ] : sim2realウィンドウ (表示位置:右側/中段)
 # ------------------------------------------------------------------------
         with dpg.window(label="sim2real", width=260, height=330, pos=[600,65]):
             with dpg.group(label = 'Genesis'):
@@ -2701,7 +3033,7 @@ def main():
                 dpg.add_text(mrd.cmd_ang_vel, tag = "ang_vel", pos = [220,Ypos+120])
 
 #---------------------------------------------------------------------------
-# [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:中段/中央下)
+# [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:右側/下段)
 # ----------------------------------------------------------------------------          
         #csv_file表示画面
         with dpg.window(label="Matlab Motion", width=260, height=175, pos=[600,400]):
