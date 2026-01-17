@@ -187,7 +187,7 @@ MCMD_EEPROM_PCTOBOARD_DATA2 = 10302  # EEPROMの[2][x]をPCからボードにMer
 # UDP受信タイミング制御
 TAU_cycle  = 0.01     # 基本ループサイクル [s]
 TAU_udp    = 0.001    # 目標受信タイミング [s]
-TAU_window = 0.008    # UDP受信ウィンドウのサイズ [s]
+TAU_WINDOW = 0.008    # UDP受信ウィンドウのサイズ [s]
 TAU_BUF_SIZE = 51     # 受信タイミング平滑化用メディアンフィルタのバッファサイズ（奇数とすること）
 
 # ================================================================================================================
@@ -1425,6 +1425,7 @@ def meridian_loop():
 
     while (mrd.running):
         print("Start.")
+        Tstart = time.perf_counter()
 
         # 180個の要素を持つint8型のNumPy配列を作成
         _r_bin_data_past = np.zeros(180, dtype=np.int8)
@@ -1440,6 +1441,11 @@ def meridian_loop():
 # [ 1 ] : UDPデータの受信
 # ------------------------------------------------------------------------
 # [ 1-1 ] : UDPデータの受信ウィンドウ
+            if Tcycle - Tstart < 8.0:
+                TAU_window = 0.0095    # 同期のため受信ウィンドウを広げる
+            else:
+                TAU_window = TAU_WINDOW
+
             while tau < TAU_window:
                 tau = time.perf_counter() - Tcycle
                 try:
@@ -1460,7 +1466,7 @@ def meridian_loop():
                         firsttime = False
                         tau_avg = tau_q1
                     else:
-                        tau_avg += 0.01*(-tau_avg + tau_q1)  # ローパスフィルタ
+                        tau_avg += 0.02*(-tau_avg + tau_q1)  # ローパスフィルタ
             else:
                 tau_udp = 0      # 受信できなかった場合は0とする
                 mrd.NoUDP += 1   # 受信ウィンドウ内でUDPが受信できなかった   
