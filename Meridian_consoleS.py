@@ -123,6 +123,8 @@ from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transfo
 #学習済みポリシーのロード用モジュール
 from rsl_rl.runners import OnPolicyRunner
 
+# ------------ sim2real -----------
+deployer = []
 
 # ------------ データロガー用変数 ---------
 MAX_LOG_SIZE = 1000
@@ -321,6 +323,9 @@ class MeridianConsole:
         self.flag_deployer_on = False           #RealRobotDeployerのインスタンス生成用flag
         self.flag_go_action = False             #ロードしたpolicyの再生または停止flag
         self.flag_obs_csv = False               #obs_bufのcsvファイル化用flag
+
+        #roll軸のオイラー角とgyro
+        self.roll_list = []
         
         self.cmd_lin_x = 0.0
         self.cmd_lin_y = 0.0
@@ -1596,9 +1601,6 @@ def load_policy():
     runner = OnPolicyRunner(env, train_cfg, log_dir, device='cuda')
     runner.load(resume_path)
     policy = runner.get_inference_policy(device='cuda')
-    #deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
-
-    #mrd.flag_set_policy = False
 
 
 # ================================================================================================================
@@ -1654,6 +1656,8 @@ def fetch_redis_data():
 
 
 def meridian_loop():
+    global deployer
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP用のsocket設定
     sock.bind((UDP_RECV_IP_DEF, UDP_RECV_PORT))
     sock.settimeout(0)  # 非ブロッキングモード 　UDPが受信されなくとも即座に戻る
@@ -1982,18 +1986,16 @@ def meridian_loop():
                         deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
                         loop_counter = 0
                         
-                        
                         #初期姿勢に移動
                         first_pos = deployer.def_pos * 180 / math.pi
 
                         for i in range(6):
-                                mrd.s_meridim_motion_f[31 + i*2] = float(first_pos[i]) #左下半身
-                                mrd.s_meridim_motion_f[61 + i*2] = float(first_pos[6 + i]) #右下半身
+                                mrd.s_meridim_motion_f[31 + i*2] = int(first_pos[i]) #左下半身
+                                mrd.s_meridim_motion_f[61 + i*2] = int(first_pos[6 + i]) #右下半身
                         for i in range(6):
                                 mrd.s_meridim_motion_keep_f[31 + i*2] = mrd.s_meridim_motion_f[31 + i*2]
                                 mrd.s_meridim_motion_keep_f[61 + i*2] = mrd.s_meridim_motion_f[61 + i*2]
                         
-
                         mrd.flag_set_policy = False
 
                     #-----------------------------------------------------------------------------------
@@ -2095,7 +2097,7 @@ def meridian_loop():
                         euler_roll = np.array(mrd.r_meridim[12] / 100 * (math.pi / 180))
                         mrd.roll_list.append([euler_roll, mrd.gyro[0]])
 
-                        deployer.loop_time_list.append([loop_time, loop_time1, loop_time2, loop_time3, loop_time4, loop_time5])
+                        #deployer.loop_time_list.append([loop_time, loop_time1, loop_time2, loop_time3, loop_time4, loop_time5])
                         '''
                         if loop_counter == 10:
 
@@ -2690,7 +2692,7 @@ def set_csv_file(sender, app_data, user_data):
 def play_csv():
     print(f"play motion: {mrd.csv_name}")
 
-    set_csv_motion(mrd.pattern_path+mrd.csv_name)
+    load_csv_motion(mrd.pattern_path+mrd.csv_name)
 
     print(f"length={len(mrd.csv_motion)}")
     
@@ -3182,7 +3184,7 @@ def main():
         dpg.destroy_context()
 
 
-def set_csv_motion(csv_file):
+def load_csv_motion(csv_file):
     #関節の角度数値の確認
     #print(mrd.pos_now)
     with open(csv_file) as f:
@@ -3209,6 +3211,7 @@ def set_csv_motion(csv_file):
 # ---- スレッド処理 ------------------------------------------------------------------------------------------------
 # ================================================================================================================
 if __name__ == '__main__':  # スレッド2つで送受信と画面描写を並列処理
+    gs.init(backend=gs.gpu, precision="32")
     thread1 = threading.Thread(target=meridian_loop)  # サブスレッドでフラグ監視・通信処理・計算処理
     thread1.start()
     main()  # メインスレッドでdearpygui描写

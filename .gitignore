@@ -1,3 +1,4 @@
 board_ip.txt
 logs
 backup
+__pycache__
