@@ -160,7 +160,7 @@ except ImportError:
 sys.stdout.reconfigure(encoding='utf-8')
 
 # 定数
-TITLE_VERSION = "Meridian_Console_v25.0613" # DPGのウィンドウタイトル兼バージョン表示
+TITLE_VERSION = "Meridian_ConsoleS" # DPGのウィンドウタイトル兼バージョン表示  二名川市 "Meridian_Console_v25.0613" よりfork
 UDP_RECV_PORT = 22222                       # 受信ポート
 UDP_SEND_PORT = 22224                       # 送信ポート
 MSG_SIZE = 90                               # Meridim配列の長さ(デフォルトは90)
