@@ -455,12 +455,12 @@ class RealRobotDeployer:
 
 
         #現状の式だとこちらを使用
-        #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
-        #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
-        #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
-        self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
-        self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
-        self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
+        self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
+        self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
+        #self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
+        #self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        #self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         
         #左下半身、右下半身
         self.servo_indices = [31, 33, 35, 37, 39, 41,  61, 63, 65, 67, 69, 71]
@@ -1986,12 +1986,12 @@ def meridian_loop():
                         deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
                         loop_counter = 0
                         
-                        #初期姿勢に移動
-                        first_pos = deployer.def_pos * 180 / math.pi
+                        first_pos = deployer.default_dof_pos * 180 / math.pi             #初期姿勢に移動
+                        deployer.goal_pos = first_pos * deployer.genesis2khr_dir         #実機用の回転方向に変換
 
                         for i in range(6):
-                                mrd.s_meridim_motion_f[31 + i*2] = int(first_pos[i]) #左下半身
-                                mrd.s_meridim_motion_f[61 + i*2] = int(first_pos[6 + i]) #右下半身
+                                mrd.s_meridim_motion_f[31 + i*2] = float(deployer.goal_pos[0][i]) #左下半身
+                                mrd.s_meridim_motion_f[61 + i*2] = float(deployer.goal_pos[0][6 + i]) #右下半身
                         for i in range(6):
                                 mrd.s_meridim_motion_keep_f[31 + i*2] = mrd.s_meridim_motion_f[31 + i*2]
                                 mrd.s_meridim_motion_keep_f[61 + i*2] = mrd.s_meridim_motion_f[61 + i*2]
