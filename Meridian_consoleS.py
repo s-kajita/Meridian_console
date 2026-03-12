@@ -456,8 +456,8 @@ class RealRobotDeployer:
 
         #現状の式だとこちらを使用
         self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
-        self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
-        self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
+        #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
+        #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
         #self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
         #self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         #self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
@@ -819,7 +819,7 @@ def save_trimdata_to_eeprom():
 
         # 回転方向 (bit8)
         is_reverse = mrd.servo_direction[l_servo_ix]
-        if not is_reverse:  # 逆転の場合はビット8を立てる (1=逆転, 0=正転)
+        if not is_reverse:  # 正転の場合は bit 8を立てる (1=正転, 0=逆転)
             l_settings |= 0x100
 
         # int16の範囲内に収まるように調整
@@ -827,24 +827,32 @@ def save_trimdata_to_eeprom():
             l_settings = l_settings - 65536
 
         # 更新したサーボ設定を格納する
-        mrd.s_meridim_special[MRD_L_ORIG_IDX + i * 2] = l_settings
+        mrd.s_meridim_special[MRD_L_ORIG_IDX + i*2] = l_settings
 
         # トリム値の設定
         if mrd.flag_trim_window_open and dpg.does_item_exist(f"Trim_{l_servo_ix}"):
             trim_val = dpg.get_value(f"Trim_{l_servo_ix}")
             print(f"trim_val={trim_val}")
             # xxxx  + mrd.servo_l_trim_values_loaded[i]
-            mrd.s_meridim_special[MRD_L_ORIG_IDX +
-                                  1 + i * 2] = int(trim_val * 100)
+            mrd.s_meridim_special[MRD_L_ORIG_IDX + i*2 +1] = int(trim_val * 100)
         else:
             trim_val=0.0
 
-        trim_msg += l_servo_ix + " " + f"{trim_val:.2f}"
+        if is_reverse:
+            servo_dir = "(-)"
+        else:
+            servo_dir = "(+)"
+        trim_msg += l_servo_ix + " " + f"{trim_val:.2f}" + servo_dir
 
         if i < MRD_SERVO_SLOTS-1:                       # ラスト以外はカンマ区切り
             trim_msg += ", "
 
     trim_msg += "\n"
+
+    print("---- L servo settings ----\n")
+    for i in range(11):
+        print(mrd.s_meridim_special[MRD_L_ORIG_IDX + i * 2])
+
 
     # R系統サーボの処理
     for i in range(15):
@@ -861,7 +869,7 @@ def save_trimdata_to_eeprom():
 
         # 回転方向 (bit8)
         is_reverse = mrd.servo_direction[r_servo_ix]
-        if not is_reverse:  # 正転の場合はビット8を立てる (1=逆転, 0=正転)
+        if not is_reverse:  # 正転の場合はbit 8を立てる (1=正転, 0=逆転)
             r_settings |= 0x100
 
         # int16の範囲内に収まるように調整
@@ -869,14 +877,13 @@ def save_trimdata_to_eeprom():
             r_settings = r_settings - 65536
 
         # 更新したサーボ設定を格納する
-        mrd.s_meridim_special[MRD_R_ORIG_IDX + i * 2] = r_settings
+        mrd.s_meridim_special[MRD_R_ORIG_IDX + i*2] = r_settings
 
         # トリム値の設定
         if mrd.flag_trim_window_open and dpg.does_item_exist(f"Trim_{r_servo_ix}"):
             trim_val = dpg.get_value(f"Trim_{r_servo_ix}")
             # xxxx  + mrd.servo_r_trim_values_loaded[i]
-            mrd.s_meridim_special[MRD_R_ORIG_IDX +
-                                  1 + i * 2] = int(trim_val * 100)
+            mrd.s_meridim_special[MRD_R_ORIG_IDX + i*2 +1] = int(trim_val * 100)
 
         trim_msg += r_servo_ix + " " + f"{trim_val:.2f}"
 
@@ -3193,7 +3200,7 @@ def load_csv_motion(csv_file):
         
     matlab2meridian = [1, 2,3,4,5, 10,11,12,13,14,15, 0, 6,7,8,9, 16,17,18,19,20,21]
         
-    matlab2khr_dir = [-1, -1, -1,1,1,1,  1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
+    matlab2khr_dir = [1,1,  1,1,1,1,  1,1,1,1, 1,1,1,1,1,1,  1,1,1,1,1,1] #胸　頭　左上半身　右上半身　左下半身　右下半身
 
     
     csvdata = [[row[i]*matlab2khr_dir[i] for i in matlab2meridian] for row in float_array]
