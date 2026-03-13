@@ -446,7 +446,6 @@ class RealRobotDeployer:
         '''
 
         #足のみの場合
-        #matlab2khr_dir = [1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, -1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
         self.num_actions = 12
         #self.def_pos = np.array([0, 0, -0.2, 0.4, -0.2, 0, 0, 0, -0.2, 0.4, -0.2, 0], dtype=float) #ロボットの初期姿勢
         self.def_pos = np.array([0, 0, -0.33, 0.66, -0.33, 0, 0, 0, -0.33, 0.66, -0.33, 0], dtype=float) #ロボットの初期姿勢2
@@ -455,11 +454,11 @@ class RealRobotDeployer:
 
 
         #現状の式だとこちらを使用
-        self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
+        #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
         #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
         #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
         #self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
-        #self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         #self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         
         #左下半身、右下半身
