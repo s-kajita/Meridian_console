@@ -324,6 +324,13 @@ class MeridianConsole:
         self.flag_go_action = False             #ロードしたpolicyの再生または停止flag
         self.flag_obs_csv = False               #obs_bufのcsvファイル化用flag
 
+        # 制御に用いるIMU ロールピッチ情報
+        self.roll_deg         = 0.0
+        self.roll_offset_deg  = 0.0
+        self.pitch_deg        = 0.0
+        self.pitch_offset_deg = 0.0
+        self.yaw_deg          = 0.0
+
         #roll軸のオイラー角とgyro
         self.roll_list = []
         
@@ -450,8 +457,6 @@ class RealRobotDeployer:
         #self.def_pos = np.array([0, 0, -0.2, 0.4, -0.2, 0, 0, 0, -0.2, 0.4, -0.2, 0], dtype=float) #ロボットの初期姿勢
         self.def_pos = np.array([0, 0, -0.33, 0.66, -0.33, 0, 0, 0, -0.33, 0.66, -0.33, 0], dtype=float) #ロボットの初期姿勢2
         self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10, 11, 12, 13], dtype=torch.long, device='cuda:0')
-        #self.genesis2khr_dir = torch.tensor([1, 1, -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．胸、頭、左足、右足
-
 
         #現状の式だとこちらを使用
         #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
@@ -535,9 +540,7 @@ class RealRobotDeployer:
         self.loop_time_list = []
 
 
-    def construct_obs(self):
-
-        
+    def construct_obs(self):        
         self.env.obs_buf = torch.cat(
             [
                 self.base_ang_vel * self.ang_vel_scale,  # 3
@@ -1878,6 +1881,10 @@ def meridian_loop():
                             mrd.s_meridim_motion_keep_f[i] = mrd.s_meridim[i]*0.01
                         mrd.flag_servo_power = 0
 
+                    #--------------- 制御に用いるIMU情報 ------------------------
+                    mrd.roll_deg  = mrd.r_meridim[12]/100 - mrd.roll_offset_deg 
+                    mrd.pitch_deg = mrd.r_meridim[13]/100 - mrd.pitch_offset_deg
+                    mrd.yaw_deg   = mrd.r_meridim[14]/100
 
 # ------------------------------------------------------------------------
 # [ 5 ] : 送信用UDPデータの作成
@@ -2013,10 +2020,9 @@ def meridian_loop():
                         mrd.gyro = np.array([mrd.r_meridim[i] / 100 for i in (5, 6, 7)], dtype=np.float32) * math.pi / 180.0
 
                         #obs →　projected gravity用クォータニオンの計算
-                        #radianに変換する必要がある．
-                        roll = mrd.r_meridim[12]/100 * math.pi / 180
-                        pitch = mrd.r_meridim[13]/100 * (math.pi / 180)
-                        yaw = mrd.r_meridim[14]/100 * math.pi / 180
+                        roll  = np.deg2rad(mrd.roll_deg)
+                        pitch = np.deg2rad(mrd.pitch_deg)
+                        yaw   = np.deg2rad(mrd.yaw_deg)
 
                         cy = math.cos(yaw * 0.5)
                         sy = math.sin(yaw * 0.5)
@@ -2030,7 +2036,6 @@ def meridian_loop():
                         mrd.y = cr * sp * cy + sr * cp * sy
                         mrd.z = cr * cp * sy - sr * sp * cy
                         mrd.Quaternion = [mrd.w, mrd.x, mrd.y, mrd.z]  
-
 
                         meridim_deg = [mrd.r_meridim[i] * 0.01 for i in deployer.servo_indices]
 
@@ -2515,6 +2520,11 @@ def pad_btn_panel_on(sender, app_data, user_data):
 def set_yaw_center():  # IMUのヨー軸センターリセットフラグをcommand_send_trial回上げる(コマンドをcommand_send_trial回送信する)
     mrd.flag_update_yaw = mrd.command_send_trial
 
+# [sensor monitor] RollPitchZeroボタン処理
+def roll_pitch_zero():
+    # 現在のIMU値をオフセット値とする ｰ> 現在姿勢のroll,pitch角を0に設定
+    mrd.roll_offset_deg  = mrd.r_meridim[12]/100 
+    mrd.pitch_offset_deg = mrd.r_meridim[13]/100
 
 # [command] ウィンドウのPowerフラグ処理(サーボのオンオフ)
 def set_servo_power(sender, app_data, user_data):
@@ -2827,19 +2837,6 @@ def main():
         # [ Axis Monitor ] : サーボ位置モニタリング用のウィンドウ(表示位置:上段/左側)
         create_trim_window()
 
-        '''
-        mrd.trim_setting_window = dpg.window(label="Trim Setting", tag="Trim Setting", width=850, height=560, pos=[5, 5], collapsed=True)
-        with mrd.trim_setting_window:
-            with dpg.group(label='RightSide'):
-                for i in range(0, 15, 1):
-                    dpg.add_slider_float(default_value=0, tag="Trim R"+str(i), label="R"+str(i),
-                                         max_value=180, min_value=-180, callback=set_servo_angle, pos=[10, 35 + i * 20], width=80)
-
-            with dpg.group(label='LeftSide'):
-                for i in range(0, 15, 1):
-                    dpg.add_slider_float(default_value=0, tag="Trim L"+str(i), label="L"+str(i),
-                                         max_value=180, min_value=-180, callback=set_servo_angle, pos=[135, 35 + i * 20], width=80)
-        '''
 # ------------------------------------------------------------------------
 # [ Axis Monitor ] : サーボ位置モニタリング用のウィンドウ(表示位置:上段/左側)
 # ------------------------------------------------------------------------
@@ -2913,6 +2910,7 @@ def main():
                 dpg.add_slider_float(default_value=0, tag="mpu12", label="yaw",
                                      max_value=327, min_value=-327, pos=[220, 120], width=60)
                 dpg.add_button(label="SetYaw", callback=set_yaw_center, width=50, pos=[270, 148])
+                dpg.add_button(label="RollPitchZero", callback=roll_pitch_zero, width=100, pos=[60, 148])
 
 # ------------------------------------------------------------------------
 # [ Command ] : コマンド送信/リモコン値表示用ウィンドウ(表示位置:中段/中央)
@@ -3087,9 +3085,12 @@ def main():
                 dpg.set_value("ID R"+str(i), _idrd/100)
 
             # IMUデータの表示更新
-            for i in range(0, 13, 1):
+            for i in range(0, 10, 1):
                 _idsensor = mrd.r_meridim[i+2]/100
                 dpg.set_value("mpu"+str(i), _idsensor)
+            dpg.set_value("mpu10", mrd.roll_deg)
+            dpg.set_value("mpu11", mrd.pitch_deg)
+            dpg.set_value("mpu12", mrd.yaw_deg)
 
             # リモコンデータの表示更新
             pad_button_short = np.array([0], dtype=np.uint16)
