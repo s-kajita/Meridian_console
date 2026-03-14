@@ -2744,6 +2744,11 @@ def emergency_stop():
 def obs2csv():
     mrd.flag_obs_csv = True
 
+def zero_speed():
+    mrd.cmd_lin_x   = 0.0
+    mrd.cmd_lin_y   = 0.0
+    mrd.cmd_ang_vel = 0.0
+
 def go_straight():
     mrd.cmd_lin_x = mrd.cmd_lin_x + 0.1
     mrd.cmd_lin_x = np.clip(mrd.cmd_lin_x, mrd.min_lin_x, mrd.max_lin_x)
@@ -3026,6 +3031,7 @@ def main():
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Down, callback=go_back,     width=100, height=100, pos=[ 60,Ypos+80])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Left, callback=go_left,     width=100, height=100, pos=[ 20,Ypos+40])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Right,callback=go_right,    width=100, height=100, pos=[100,Ypos+40])
+                dpg.add_button(label="O", callback=zero_speed, width=20, height=20, pos=[60,Ypos+40])
 
                 dpg.add_text("lin x vel", pos = [10,Ypos+120])
                 dpg.add_text(mrd.cmd_lin_x, tag="lin_x_velocity", pos = [80,Ypos+120])
