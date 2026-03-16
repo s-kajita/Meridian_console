@@ -26,7 +26,7 @@ plt.title(os.path.basename(__file__))
 plt.subplot(312)
 plt.plot(Tcycle,gyro)
 plt.legend(gyro_labels)
-plt.ylim(-20,20)
+#plt.ylim(-20,20)
 plt.ylabel('[deg/s]')
 plt.xlabel('time [s]')
 

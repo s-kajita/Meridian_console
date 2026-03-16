@@ -460,11 +460,7 @@ class RealRobotDeployer:
 
         #現状の式だとこちらを使用
         #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
-        #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
-        #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
-        #self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
         self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
-        #self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         
         #左下半身、右下半身
         self.servo_indices = [31, 33, 35, 37, 39, 41,  61, 63, 65, 67, 69, 71]
@@ -2857,11 +2853,8 @@ def main():
                     dpg.add_slider_float(default_value=0, tag="ID L"+str(i), label="L"+str(i),
                                          max_value=180, min_value=-180, callback=set_servo_angle, pos=[135, 35 + i * 20], width=80)
 
-            dpg.add_button(label="Home", callback=set_servo_home, pos=[10, 340], width=40)
-            #dpg.add_button(label="Trim", callback=open_trim_window, pos=[55, 340], width=40)
             dpg.add_radio_button(label="display_mode", items=["Target", "Actual"], callback=change_display_mode,
                                  default_value="Actual", pos=[100, 340], horizontal=True)
-            dpg.add_button(label="Save Log", callback=save_log_file, pos=[10,360], width=70)
 
 
 # ------------------------------------------------------------------------
@@ -2918,9 +2911,9 @@ def main():
                 dpg.add_button(label="RollPitchZero", callback=roll_pitch_zero, width=100, pos=[60, 148])
 
 # ------------------------------------------------------------------------
-# [ Command ] : コマンド送信/リモコン値表示用ウィンドウ(表示位置:中段/中央)
+# [ Command ] : コマンド送信ウィンドウ(表示位置:中段/中央)
 # ------------------------------------------------------------------------
-        with dpg.window(label="Command", width=335, height=190, pos=[260, 205]):
+        with dpg.window(label="Command", width=335, height=168, pos=[260, 205]):
             dpg.add_checkbox(label="Power", tag="Power", callback=set_servo_power, pos=[100, 27])
             dpg.add_checkbox(label="Demo", tag="Action", callback=set_demo_action, pos=[100, 53])
             dpg.add_checkbox(label="Python", tag="python", callback=set_python_action, pos=[100, 76])
@@ -2943,21 +2936,28 @@ def main():
                 100, 100, 100, 255), thickness=1.0, fill=(0, 0, 0, 0))
             dpg.draw_line(p1=[84, 22], p2=[186, 22], color=(
                 100, 100, 100, 255), thickness=1.0)
+            
+            dpg.add_button(label="Home", callback=set_servo_home, pos=[20, 140], width=60)
+            dpg.add_button(label="Save Log", callback=save_log_file, pos=[210,140], width=70)
 
-            dpg.add_text("Control Pad Monitor", pos=[10, 123])
-            dpg.add_text("button", tag="pad_button", pos=[170, 123])
+# ------------------------------------------------------------------------
+# [ Command ] : リモコン値表示用ウィンドウ(表示位置:中段下/中央)
+# ------------------------------------------------------------------------
+        with dpg.window(label="Pad", width=335, height=60, pos=[260, 375], collapsed=True):
+            dpg.add_text("Control Pad Monitor", pos=[10, 20])
+            dpg.add_text("button", tag="pad_button", pos=[170, 20])
             dpg.add_slider_int(default_value=0, tag="pad_Lx", label="Lx",
-                               max_value=127, min_value=-127, pos=[10, 143], width=40)
+                               max_value=127, min_value=-127, pos=[10, 40], width=40)
             dpg.add_slider_int(default_value=0, tag="pad_Ly", label="Ly",
-                               max_value=127, min_value=-127, pos=[90, 143], width=40)
+                               max_value=127, min_value=-127, pos=[90, 40], width=40)
             dpg.add_slider_int(default_value=0, tag="pad_Rx", label="Rx",
-                               max_value=127, min_value=-127, pos=[170, 143], width=40)
+                               max_value=127, min_value=-127, pos=[170, 40], width=40)
             dpg.add_slider_int(default_value=0, tag="pad_Ry", label="Ry",
-                               max_value=127, min_value=-127, pos=[250, 143], width=40)
+                               max_value=127, min_value=-127, pos=[250, 40], width=40)
             dpg.add_slider_int(default_value=0, tag="pad_L2v", label="L2v",
-                               max_value=255, min_value=0, pos=[90, 163], width=40)
+                               max_value=255, min_value=0, pos=[90, 60], width=40)
             dpg.add_slider_int(default_value=0, tag="pad_R2v", label="R2v",
-                               max_value=255, min_value=0, pos=[170, 163], width=40)
+                               max_value=255, min_value=0, pos=[170, 60], width=40)
 
 # ------------------------------------------------------------------------
 # [ Button Input ] : リモコン入力コンパネ用ウィンドウ(表示位置:上段/右側)
