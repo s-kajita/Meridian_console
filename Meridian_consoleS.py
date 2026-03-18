@@ -100,6 +100,7 @@ import math
 import dearpygui.dearpygui as dpg
 import threading
 import signal
+import pygame   # Joystick インタフェース
 import time
 import atexit
 import struct
@@ -155,6 +156,17 @@ try:
 except ImportError:
     rospy_imported = False
     print("rospy not found. ROS functions will be disabled.")
+
+# Joystickインタフェース
+pygame.init()
+pygame.joystick.init()
+# ジョイスティックの取得
+if pygame.joystick.get_count():
+    joy = pygame.joystick.Joystick(0)
+    joy.init()
+    print("使用デバイス:", joy.get_name())
+else: 
+    print("ジョイスティックが見つかりません")
 
 # UTF-8 モード
 sys.stdout.reconfigure(encoding='utf-8')
@@ -331,9 +343,6 @@ class MeridianConsole:
         self.pitch_offset_deg = 0.0
         self.yaw_deg          = 0.0
 
-        #roll軸のオイラー角とgyro
-        self.roll_list = []
-        
         self.cmd_lin_x = 0.0
         self.cmd_lin_y = 0.0
         self.cmd_ang_vel = 0.0
@@ -1617,7 +1626,6 @@ def load_policy():
 # ------------------------------------------------------------------------
 mrd = MeridianConsole()  # Meridianデータのインスタンス
 
-
 def fetch_redis_data():
     if not mrd.flag_redis_sub:
         return
@@ -1986,6 +1994,16 @@ def meridian_loop():
                         if mrd.counter == len(mrd.csv_motion)-1:
                             mrd.flag_play_csv = False
 
+                    #---------------------------- Joystickによる目標速度変更 -------------------
+                    if 'joy' in globals():
+                        pygame.event.pump()
+                        x = joy.get_axis(1) # 左ボタン上(-1)下(+1) 前進/後退
+                        y = joy.get_axis(0) # 左ボタン右(+1)左(-1)  横歩き
+                        z = joy.get_axis(3) # 右ボタン右(+1)左(-1)　回転
+
+                        mrd.cmd_lin_x   = np.clip(-x*mrd.max_lin_x*1.1  , mrd.min_lin_x,    mrd.max_lin_x)
+                        mrd.cmd_lin_y   = np.clip(-y*mrd.max_lin_y*1.1  , mrd.min_lin_y,    mrd.max_lin_y)
+                        mrd.cmd_ang_vel = np.clip(-z*mrd.max_ang_vel*1.1, mrd.min_ang_vel,  mrd.max_ang_vel)
 
                     #---------------------------- sim2real処理 ----------------------------------
                     #policy load処理
@@ -2099,10 +2117,6 @@ def meridian_loop():
 
                         deployer.dof_prev_pos.copy_(deployer.dof_pos)
                         loop_counter += 1
-
-                        #roll軸のオイラー角とgyroのリストを作成する
-                        euler_roll = np.array(mrd.r_meridim[12] / 100 * (math.pi / 180))
-                        mrd.roll_list.append([euler_roll, mrd.gyro[0]])
 
                         #deployer.loop_time_list.append([loop_time, loop_time1, loop_time2, loop_time3, loop_time4, loop_time5])
                         '''
@@ -3034,15 +3048,15 @@ def main():
                 dpg.add_button(label="O", callback=zero_speed, width=20, height=20, pos=[60,Ypos+40])
 
                 dpg.add_text("lin x vel", pos = [10,Ypos+120])
-                dpg.add_text(mrd.cmd_lin_x, tag="lin_x_velocity", pos = [80,Ypos+120])
+                dpg.add_text(format(mrd.cmd_lin_x,'.2f'), tag="lin_x_velocity", pos = [80,Ypos+120])
                 dpg.add_text("lin y vel", pos = [10,Ypos+150])
-                dpg.add_text(mrd.cmd_lin_y, tag="lin_y_velocity", pos = [80,Ypos+150])
+                dpg.add_text(format(mrd.cmd_lin_y,'.2f'), tag="lin_y_velocity", pos = [80,Ypos+150])
 
                 dpg.add_text("Yaw", pos=[190,Ypos+40])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Down, callback = turn_right,  width=100, height=100, pos = [160,Ypos+40])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Up, callback = turn_left, width=100, height=100, pos = [220,Ypos+40])
                 dpg.add_text("ang vel", pos = [160, Ypos+120])
-                dpg.add_text(mrd.cmd_ang_vel, tag = "ang_vel", pos = [220,Ypos+120])
+                dpg.add_text(format(mrd.cmd_ang_vel,'.2f'), tag = "ang_vel", pos = [220,Ypos+120])
 
 #---------------------------------------------------------------------------
 # [Matlab Motion] : csvファイル選択と再生操作用ウィンドウ(表示位置:右側/下段)
@@ -3120,9 +3134,9 @@ def main():
             dpg.set_value("pad_R2v", int(_padR2val))
             dpg.set_value("button_data", int(mrd.r_meridim[15]))
             
-            dpg.set_value("lin_x_velocity", mrd.cmd_lin_x)
-            dpg.set_value("lin_y_velocity", mrd.cmd_lin_y)
-            dpg.set_value("ang_vel", mrd.cmd_ang_vel)
+            dpg.set_value("lin_x_velocity", format(mrd.cmd_lin_x,'.2f'))
+            dpg.set_value("lin_y_velocity", format(mrd.cmd_lin_y,'.2f'))
+            dpg.set_value("ang_vel", format(mrd.cmd_ang_vel,'.2f'))
 
 # ROS1 joint_statesのパブリッシュ =======================================
             global rospy_imported
