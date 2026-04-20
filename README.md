@@ -1,4 +1,4 @@
-# [Meridian_consoleS] 
+# Meridian_consoleS 
 NinagawaさんのMeridian_consoleに、以下の改造と機能追加を行いました。
  - UDP通信の周期一定化のための改造（？）
  - sim2real（by 片岡君)
