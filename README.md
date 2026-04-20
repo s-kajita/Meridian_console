@@ -1,3 +1,8 @@
+# [Meridian_consoleS] 
+NinagawaさんのMeridian_consoleに、以下の改造と機能追加を行いました。
+　・UDP通信の周期一定化のための改造（？）
+  ・sim2real（by 片岡君)
+
 # [Meridian_console](https://github.com/Ninagawa123/Meridian_console) 
 Meridian consoleは, ロボットのリアルタイムなデジタルツイン化を実現するmeridian flow systemの一部です.  
 ESP32等のwifi付きマイコンボードとペアで使用することで, ロボットの状態情報をデバイス間で100Hzの頻度で共有することができます.  
