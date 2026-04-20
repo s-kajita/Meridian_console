@@ -1561,28 +1561,20 @@ def load_policy():
 
     global env_cfg,obs_cfg,env,policy
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="action_rate005kp30")
-    parser.add_argument("--ckpt", type=int, default=999)
-    parser.add_argument('--eval', type=int, default=1)
-    args = parser.parse_args()
-
-    #exp_name = "khr-walking"
-    #args.exp_name = "asibumi_and_walk54"
-    args.exp_name = "khr3hv"
-    args.ckpt = 10000
-
-     #デフォルト
-    log_dir = f"../../gsw4/khr_rl_sample/logs/{args.exp_name}/"
-    with open(log_dir+"cfgs.pkl","rb") as f:
+    # 学習済みポリシーのディレクトリ、名称、チェックポイント
+    log_dir = "../khr_rl_sample/logs/"
+    exp_name = "khr3hv"
+    ckpt = 10000
+   
+    with open(log_dir+exp_name+"/cfgs.pkl","rb") as f:
         env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(f)
 
     reward_cfg["reward_scales"] = {}
 
-    #学習済みポリシーのロード
-    #KHREnvを用いてOnPolicyRunner経由でロード
-    #khr_eval.pyをimportする．
+    #KHREnvを用いてOnPolicyRunner経由で学習済みポリシーをロード
+
     from khr_env_no_gs import KHREnv
+    
     env = KHREnv(
         num_envs=1,
         env_cfg=env_cfg,
@@ -1593,7 +1585,7 @@ def load_policy():
     )
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device='cuda')
-    runner.load(os.path.join(log_dir, f"model_{args.ckpt}.pt"))
+    runner.load(os.path.join(log_dir+exp_name, f"model_{ckpt}.pt"))
     policy = runner.get_inference_policy(device='cuda')
 
 # ================================================================================================================
