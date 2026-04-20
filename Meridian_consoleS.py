@@ -120,6 +120,8 @@ torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
 import genesis as gs
+from tensordict import TensorDict
+
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
 #学習済みポリシーのロード用モジュール
 from rsl_rl.runners import OnPolicyRunner
@@ -431,45 +433,20 @@ class RealRobotDeployer:
 
     def __init__(self, policy, env_cfg, obs_cfg, env):
 
-        '''
-        #全身の場合
-        self.num_actions = 22
-        self.def_pos = [0,0, 0,0,0,0, 0,0,0,0, 0,0,-0.2,0.4,-0.2,0, 0,0,-0.2,0.4,-0.2,0] #ロボットの初期姿勢
 
-        #meridian用に関節順を入れ替えるための処理に使う変数
-        self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 1, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21],dtype=torch.long, device='cuda:0')#genesis内のインデックスでmeridian配列順に並び替える
-        #self.genesis2khr_dir = torch.tensor([1, 1,  -1,1,1,1,  -1,1,1,-1,  -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．
-        #現状の式だとこちらを使用
-        self.genesis2khr_dir = torch.tensor([1,  -1,1,1,1,  -1,1,-1,1,1,-1,  1,  -1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．
-        #matlab2khr_dir = [1, 1,  -1,1,1,1,  -1,1,1,-1,  -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1] #胸　頭　左上半身　右上半身　左下半身　右下半身
-        self.matlab2khr_dir = torch.tensor([1, 1, -1,1,1,1, -1,1,1,-1, -1,1,-1,1,1,-1, 1,1,1,-1,-1,-1], device='cuda', dtype=torch.float32)
-
-        #腰、頭、左上半身、右上半身、左下半身、右下半身
-        self.servo_indices = [51,21,23, 25, 27, 29, 53, 55, 57, 59, 31, 33, 35, 37, 39, 41, 61, 63, 65, 67, 69, 71 ]
-        '''
-
-        '''
-        #胸、頭、足のみの場合
-        self.num_actions = 14
-        self.def_pos = [0, 0, 0,0,-0.2,0.4,-0.2,0,  0,0,-0.2,0.4,-0.2,0] #ロボットの初期姿勢
+        self.num_actions = 12
+        self.def_pos = np.array([0, 0, -0.2, 0.4, -0.2, 0, 0, 0, -0.2, 0.4, -0.2, 0], dtype=float) #ロボットの初期姿勢
         self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10, 11, 12, 13], dtype=torch.long, device='cuda:0')
         #self.genesis2khr_dir = torch.tensor([1, 1, -1,1,-1,1,1,-1,  1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisで定義した関節順に回転方向が定義されている．胸、頭、左足、右足
-        #現状の式だとこちらを使用
-        self.genesis2khr_dir = torch.tensor([1,  -1,1,-1,1,1,-1,  1,   1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．胸、左足、頭、右足
-        
-        #胸、頭、左下半身、右下半身
-        self.servo_indices = [51, 21, 31, 33, 35, 37, 39, 41, 61, 63, 65, 67, 69, 71]
-        '''
 
-        #足のみの場合
-        self.num_actions = 12
-        #self.def_pos = np.array([0, 0, -0.2, 0.4, -0.2, 0, 0, 0, -0.2, 0.4, -0.2, 0], dtype=float) #ロボットの初期姿勢
-        self.def_pos = np.array([0, 0, -0.33, 0.66, -0.33, 0, 0, 0, -0.33, 0.66, -0.33, 0], dtype=float) #ロボットの初期姿勢2
-        self.genesis2meridian = torch.tensor([0, 2, 3, 4, 5, 6, 7, 1, 8, 9, 10, 11, 12, 13], dtype=torch.long, device='cuda:0')
 
         #現状の式だとこちらを使用
         #self.genesis2khr_dir = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #meridian用の順に回転方向を定義する．　左下半身、右下半身
+        #self.khr_dir2genesis = torch.tensor([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1],dtype=torch.float32, device='cuda:0') #genesisでの回転方向に変換
+        #self.khr_dir = np.array([-1,1,-1,1,1,-1, -1,1,1,-1,-1,-1], dtype=float)
+        self.khr_dir = np.array([1,1,1,1,1,1, 1,1,1,1,1,1], dtype=float)
         self.genesis2khr_dir = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
+        self.khr_dir2genesis = torch.tensor([1,1,1,1,1,1, 1,1,1,1,1,1],dtype=torch.float32, device='cuda:0')
         
         #左下半身、右下半身
         self.servo_indices = [31, 33, 35, 37, 39, 41,  61, 63, 65, 67, 69, 71]
@@ -494,9 +471,12 @@ class RealRobotDeployer:
         #self.motors_dof_idx = [self.robot.get_joint(name).dof_start for name in self.env_cfg["joint_names"]]
 
         self.obs_list = []
+        self.obs_buf = torch.zeros((self.num_envs, 71),dtype=torch.float32,device='cuda')
+        self.privileged_obs_buf = torch.zeros((self.num_envs, 1),dtype=torch.float32,device='cuda')
         self.dof_pos = torch.zeros_like(self.actions)
         self.dof_vel = torch.zeros_like(self.actions)
         self.target_dof_pos = torch.zeros_like(self.actions)
+        self.last_target_dof_pos = torch.zeros_like(self.actions)
         self.last_actions = torch.zeros_like(self.actions)
         self.last_dof_vel = torch.zeros_like(self.actions)
 
@@ -525,6 +505,7 @@ class RealRobotDeployer:
         self.start_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
         self.goal_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
         self.dof_prev_pos = torch.tensor(self.def_pos, device='cuda', dtype=torch.float32).unsqueeze(0)
+        
 
 
     
@@ -545,8 +526,10 @@ class RealRobotDeployer:
         self.loop_time_list = []
 
 
-    def construct_obs(self):        
-        self.env.obs_buf = torch.cat(
+    def construct_obs(self):
+
+        
+        self.obs_buf = torch.concatenate(
             [
                 self.base_ang_vel * self.ang_vel_scale,  # 3
                 self.projected_gravity, #3
@@ -564,6 +547,9 @@ class RealRobotDeployer:
         self.obs_list.append(self.env.obs_buf.cpu().numpy())
         self.last_actions[:] = self.actions
         self.last_dof_vel[:] = self.dof_vel
+
+    def get_observations(self):
+        return TensorDict({"policy": self.obs_buf}, batch_size=[self.num_envs])
 
 
 #------------------------------------------------------------
@@ -1582,21 +1568,16 @@ def load_policy():
     args = parser.parse_args()
 
     #exp_name = "khr-walking"
-    #args.exp_name = "walk_in_a_place_50Hz"
-    #args.exp_name = "acceleration2"
-    #args.exp_name = "reduce_layers"
-    #args.exp_name = "asibumi_and_walk34"
-    args.exp_name = "asibumi_and_walk54"
-    #args.exp_name = "otamesi"
+    #args.exp_name = "asibumi_and_walk54"
+    args.exp_name = "khr3hv"
+    args.ckpt = 10000
 
-    #args.exp_name = 'simply_asibumi_clip1'
-
-    args.ckpt = 19999
      #デフォルト
-    env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(open(f"../{args.exp_name}/cfgs.pkl", "rb"))
-    log_dir = f"../{args.exp_name}"
-    resume_path = os.path.join(log_dir, f"model_{args.ckpt}.pt")
+    log_dir = f"../../gsw4/khr_rl_sample/logs/{args.exp_name}/"
+    with open(log_dir+"cfgs.pkl","rb") as f:
+        env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(f)
 
+    reward_cfg["reward_scales"] = {}
 
     #学習済みポリシーのロード
     #KHREnvを用いてOnPolicyRunner経由でロード
@@ -1609,13 +1590,11 @@ def load_policy():
         reward_cfg=reward_cfg,
         command_cfg=command_cfg,
         show_viewer=False,
-
     )
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device='cuda')
-    runner.load(resume_path)
+    runner.load(os.path.join(log_dir, f"model_{args.ckpt}.pt"))
     policy = runner.get_inference_policy(device='cuda')
-
 
 # ================================================================================================================
 # ---- メインループ ------------------------------------------------------------------------------------------------
@@ -2067,7 +2046,9 @@ def meridian_loop():
                         deployer.q_xyzw.copy_(torch.tensor(mrd.Quaternion, dtype=torch.float32, device="cuda")).unsqueeze(0)
                         deployer.projected_gravity = transform_by_quat(deployer.global_gravity, inv_quat(deployer.q_xyzw))
                         deployer.commands = torch.tensor([mrd.cmd_lin_x,mrd.cmd_lin_y,mrd.cmd_ang_vel], device='cuda', dtype=torch.float32).unsqueeze(0)
+                        
                         deployer.construct_obs()
+                        obs_dict = deployer.get_observations()
 
                         if loop_counter % 2 == 0:
                             with torch.no_grad():
@@ -2080,8 +2061,8 @@ def meridian_loop():
                                 deployer.cos_phase = torch.cos(2 * np.pi * deployer.phase ).unsqueeze(0)
                                 
                             
-                                obs = deployer.env.obs_buf
-                                deployer.actions = deployer.policy(obs)
+                                #obs = deployer.env.obs_buf
+                                deployer.actions = deployer.policy(obs_dict)
                                 deployer.actions = torch.clip(deployer.actions, -deployer.clip_actions, deployer.clip_actions)
                                 #print(deployer.actions)
                                 
