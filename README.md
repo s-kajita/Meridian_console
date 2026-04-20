@@ -1,7 +1,7 @@
 # [Meridian_consoleS] 
 NinagawaさんのMeridian_consoleに、以下の改造と機能追加を行いました。
-　・UDP通信の周期一定化のための改造（？）
-  ・sim2real（by 片岡君)
+ - UDP通信の周期一定化のための改造（？）
+ - sim2real（by 片岡君)
 
 # [Meridian_console](https://github.com/Ninagawa123/Meridian_console) 
 Meridian consoleは, ロボットのリアルタイムなデジタルツイン化を実現するmeridian flow systemの一部です.  
