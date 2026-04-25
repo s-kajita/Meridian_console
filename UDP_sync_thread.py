@@ -24,8 +24,15 @@ tau_log  = deque([],maxlen=MAX_LOG_SIZE)
 tau_avg_log = deque([],maxlen=MAX_LOG_SIZE)
 esp32_time_log = deque([],maxlen=MAX_LOG_SIZE)
 
-UDP_SEND_IP_DEF= '192.168.11.12'
-UDP_RECV_IP_DEF= '192.168.11.3'
+#UDP_SEND_IP_DEF= '192.168.11.12'
+#UDP_RECV_IP_DEF= '192.168.11.3'
+
+#------- ASUS WiFi router ----------
+UDP_SEND_IP_DEF= '192.168.50.145'   # robot
+UDP_RECV_IP_DEF= '192.168.50.150'   # PC
+
+
+
 NETWORK_MODE = 0
 
 UDP_SEND_IP = UDP_SEND_IP_DEF

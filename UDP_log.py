@@ -149,7 +149,7 @@ _r_bin_data = np.zeros(180, dtype=np.int8)
 with closing(sock):
     Tstart = time.perf_counter()
     Tdisp = 1.0;
-    for n in range(500):
+    for n in range(2000):
         _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
         Tudp = time.perf_counter()    #　UDP受信時刻
         Tudp_log.append(Tudp)
@@ -195,7 +195,6 @@ plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
 #----------------------
-'''
 plt.figure()
 esp32_t = np.array(df['esp32_time0']) 
 esp32_cycle = np.diff(esp32_t)
@@ -212,8 +211,29 @@ plt.legend(['ESP32 cycle'])
 plt.ylim(-2,40)
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
-'''
 
+#----------------------
+plt.figure()
+esp32_time0 = np.array(df['esp32_time0'])  
+esp32_time1 = np.array(df['esp32_time1'])  
+esp32_time2 = np.array(df['esp32_time2'])  
+esp32_time3 = np.array(df['esp32_time3'])  
+Tcycle = esp32_time0[0:-1]
+
+plt.subplot(211)
+plt.plot(Tcycle,np.diff(esp32_time0))
+plt.ylim(-2,30)
+plt.legend(['cycle time'])
+plt.xlabel('time [s]')
+plt.ylabel('[ms]')
+plt.title(os.path.basename(__file__))
+
+plt.subplot(212)
+plt.plot(esp32_time0,esp32_time2-esp32_time1,esp32_time0,esp32_time1-esp32_time0,esp32_time0,esp32_time3-esp32_time0)
+plt.legend(['BNO055 read time','UDP send/recv','Thread start'])
+plt.ylim(-5,20)
+plt.ylabel('[ms]')
+plt.xlabel('time [s]')
 
 
 plt.show()
