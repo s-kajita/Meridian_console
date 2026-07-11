@@ -1557,15 +1557,18 @@ UDP_SEND_IP = UDP_SEND_IP_DEF
 #-------------------------------------------------------
 #  sim2real 学習済みポリシーのロード
 #-------------------------------------------------------
-def load_policy():
+def load_policy(exp_name, ckpt):
 
     global env_cfg,obs_cfg,env,policy
 
     # 学習済みポリシーのディレクトリ、名称、チェックポイント
     log_dir = "../khr_rl_sample/logs/"
-    exp_name = "khr3hv"
-    ckpt = 10000
-   
+    #exp_name = "khrbase3"
+    #exp_name = "baseline"
+    #ckpt = 5000
+    #ckpt = 10000
+    #ckpt = 20000
+
     with open(log_dir+exp_name+"/cfgs.pkl","rb") as f:
         env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg = pickle.load(f)
 
@@ -1587,6 +1590,8 @@ def load_policy():
     runner = OnPolicyRunner(env, train_cfg, log_dir, device='cuda')
     runner.load(os.path.join(log_dir+exp_name, f"model_{ckpt}.pt"))
     policy = runner.get_inference_policy(device='cuda')
+
+    print(f"**** exp_name: {exp_name}   chkpt: {ckpt} ****")
 
 # ================================================================================================================
 # ---- メインループ ------------------------------------------------------------------------------------------------
@@ -1639,7 +1644,7 @@ def fetch_redis_data():
         print(f"[Redis Error] Unexpected error: {str(e)}")
 
 
-def meridian_loop():
+def meridian_loop(exp_name, ckpt):
     global deployer
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP用のsocket設定
@@ -1980,7 +1985,7 @@ def meridian_loop():
                     #policy load処理
                     #Sim2Real ポリシーをロード
                     if mrd.flag_set_policy:
-                        load_policy()
+                        load_policy(exp_name, ckpt)
                         deployer = RealRobotDeployer(policy, env_cfg, obs_cfg, env)
                         loop_counter = 0
                         
@@ -2811,7 +2816,7 @@ def calcS(t):
 # ================================================================================================================
 # ---- dearpyguiによるコンソール画面描写 -----------------------------------------------------------------------------
 # ================================================================================================================
-def main():
+def main(exp_name, ckpt):
     while (mrd.running):
 
         # dpg描画処理1 ==========================================================
@@ -3004,16 +3009,20 @@ def main():
         with dpg.window(label="sim2real", width=260, height=330, pos=[600,65]):
             with dpg.group(label = 'Genesis'):
 
-                #学習済みpolicyのロード
-                dpg.add_button(label = "load policy", callback = set_policy, width=80, pos = [5,25])
-                #読み込んだ学習済みpolicyで推論開始
-                dpg.add_button(label="Go action", callback = go_action, width=80, pos = [90,25])
-                #やばい動きをした際の緊急停止用ボタン
-                dpg.add_button(label = "Emer. stop", callback = emergency_stop, width=80, pos = [175,25])
-                #観測データをcsvファイル化するためのボタン
-                dpg.add_button(label = "obs2csv", callback = obs2csv, width=110, pos = [5,60])
+                dpg.add_text(f"exp_name: {exp_name}", pos = [50,25])
+                dpg.add_text(f"ckpt    : {ckpt}", pos = [50,45])
 
-                Ypos = 130
+                Ypos = 60
+                #学習済みpolicyのロード
+                dpg.add_button(label = "load policy", callback = set_policy, width=80, pos = [5,25+Ypos])
+                #読み込んだ学習済みpolicyで推論開始
+                dpg.add_button(label="Go action", callback = go_action, width=80, pos = [90,25+Ypos])
+                #緊急停止用ボタン
+                dpg.add_button(label = "Emer. stop", callback = emergency_stop, width=80, pos = [175,25+Ypos])
+                #観測データをcsvファイル化するためのボタン
+                dpg.add_button(label = "obs2csv", callback = obs2csv, width=110, pos = [5,60+Ypos])
+
+                Ypos = 150
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Up,   callback=go_straight, width=100, height=100, pos=[ 60,Ypos])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Down, callback=go_back,     width=100, height=100, pos=[ 60,Ypos+80])
                 dpg.add_button(label="", arrow=True, direction=dpg.mvDir_Left, callback=go_left,     width=100, height=100, pos=[ 20,Ypos+40])
@@ -3211,8 +3220,16 @@ def load_csv_motion(csv_file):
 # ---- スレッド処理 ------------------------------------------------------------------------------------------------
 # ================================================================================================================
 if __name__ == '__main__':  # スレッド2つで送受信と画面描写を並列処理
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", "--exp_name", type=str, default="baseline")
+    parser.add_argument("-c","--ckpt", type=int, default=10000)
+    args = parser.parse_args()
+
+    #exp_name = "baseline"
+    #ckpt = 10000
+
     gs.init(backend=gs.gpu, precision="32")
-    thread1 = threading.Thread(target=meridian_loop)  # サブスレッドでフラグ監視・通信処理・計算処理
+    thread1 = threading.Thread(target=meridian_loop,args=(args.exp_name, args.ckpt))  # サブスレッドでフラグ監視・通信処理・計算処理
     thread1.start()
-    main()  # メインスレッドでdearpygui描写
+    main(args.exp_name, args.ckpt)  # メインスレッドでdearpygui描写
 

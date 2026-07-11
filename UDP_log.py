@@ -146,10 +146,12 @@ _r_bin_data = np.zeros(180, dtype=np.int8)
 #sock.settimeout(0)  # 非ブロッキングモード
 #sock.settimeout(0.0003)
 
+Tperiod = 20.0  # UDP受信期間 [s]
+Tcycle = 0.01  # UDP送信サイクル [s]
 with closing(sock):
     Tstart = time.perf_counter()
     Tdisp = 1.0;
-    for n in range(2000):
+    for n in range(int(Tperiod/Tcycle)):
         _r_bin_data, addr = sock.recvfrom(MSG_BUFF)
         Tudp = time.perf_counter()    #　UDP受信時刻
         Tudp_log.append(Tudp)
@@ -157,7 +159,7 @@ with closing(sock):
         esp32_time = [r_meridim_ushort[idx] for idx in [80,81,82,83]]
         esp32_time_log.append(esp32_time)
         if Tudp-Tstart >= Tdisp:
-            print(f"time = {Tdisp}")
+            print(f"time = {Tdisp}s /{Tperiod}s")
             Tdisp += 1.0
 
 print("End.") 
@@ -236,5 +238,7 @@ plt.ylabel('[ms]')
 plt.xlabel('time [s]')
 
 
-plt.show()
+plt.show(block=False)
+input('Hit enter to close figs')
+plt.close("all")
 
