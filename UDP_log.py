@@ -148,6 +148,7 @@ _r_bin_data = np.zeros(180, dtype=np.int8)
 
 Tperiod = 20.0  # UDP受信期間 [s]
 Tcycle = 0.01  # UDP送信サイクル [s]
+print(f"Wait for {Tperiod}s")
 with closing(sock):
     Tstart = time.perf_counter()
     Tdisp = 1.0;
