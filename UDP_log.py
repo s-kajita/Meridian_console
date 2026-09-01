@@ -192,7 +192,7 @@ plt.ylabel('frequency')
 plt.title(os.path.basename(__file__))
 
 plt.subplot(212)
-plt.plot(Tudp[1:],cycle,'.-')
+plt.plot(Tudp[1:],cycle,'.')
 plt.legend(['Tudp cycle'])
 plt.ylabel('[ms]')
 plt.xlabel('time [s]')
